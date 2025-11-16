@@ -1,0 +1,16 @@
+export const REGIONS = [
+  "Toshkent shahri",
+  "Toshkent viloyati",
+  "Andijon",
+  "Buxoro",
+  "Jizzax",
+  "Qashqadaryo",
+  "Navoiy",
+  "Namangan",
+  "Samarqand",
+  "Surxondaryo",
+  "Sirdaryo",
+  "Farg'ona",
+  "Xorazm",
+  "Qoraqalpog'iston",
+];
