@@ -1,5 +1,4 @@
-// O'zbekiston viloyatlari
-const REGIONS = [
+export const REGIONS = [
   "Toshkent shahri",
   "Toshkent viloyati",
   "Andijon",
@@ -15,5 +14,3 @@ const REGIONS = [
   "Xorazm",
   "Qoraqalpog'iston",
 ];
-
-module.exports = { REGIONS };
