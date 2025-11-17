@@ -62,7 +62,9 @@ viewPromoCodesScene.enter(async (ctx) => {
         .oneTime(),
     });
 
-    return await ctx.scene.leave();
+    // Keep the scene active so the button handlers below can respond
+    // User will press "🔙 Profilga qaytish" or "🏠 Asosiy menyu"
+    return;
   } catch (error) {
     console.error("Promo kodlarni ko'rsatishda xatolik:", error);
     await ctx.reply(
@@ -107,7 +109,7 @@ ${user.username ? `✈️ *Username:* @${user.username}` : ""}
     ...Markup.keyboard([
       ["🎟 Barcha kodlarimni ko'rish"],
       ["✏️ Ma'lumotlarni o'zgartirish"],
-      ["🔙 Asosiy menyu"],
+      ["🏠 Asosiy menyu"],
     ]).resize(),
   });
 });
