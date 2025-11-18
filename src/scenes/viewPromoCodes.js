@@ -2,24 +2,20 @@ const { Scenes, Markup } = require("telegraf");
 const PromoCodeUsage = require("../models/PromoCodeUsage");
 const { mainMenuKeyboard } = require("../keyboards/keyboards");
 
-// Promo kodni maskirovka qilish funksiyasi (faqat birinchi 3 harfni ko'rsatish)
-const maskPromoCode = (code) => {
-  if (!code || code.length < 4) return code;
-  return code.slice(0, 3) + "*".repeat(code.length - 3);
-};
-
 const viewPromoCodesScene = new Scenes.BaseScene("view_promo_codes");
 
 viewPromoCodesScene.enter(async (ctx) => {
   try {
     const usedCodes = await PromoCodeUsage.find({
       telegramId: ctx.from.id,
-    }).sort({ usedAt: -1 }); // Eng yangilarini birinchi
+    })
+      .populate("seasonId")
+      .sort({ usedAt: -1 }); // Most recent first
 
     if (!usedCodes || usedCodes.length === 0) {
       await ctx.reply(
         "❌ *Siz hali birorta promo kod ishlatmagansiz!*\n\n" +
-          "Kod kiritish uchun 📝 *Promokodni kiritish* tugmasini bosing.",
+          "Kod kiritish uchun 📝 *Kod yuborish* tugmasini bosing.",
         {
           parse_mode: "Markdown",
           ...mainMenuKeyboard(),
@@ -29,7 +25,6 @@ viewPromoCodesScene.enter(async (ctx) => {
     }
 
     // Telegram limit: 4096 characters
-    // Har bir kod ~40 char, max 30ta kod = ~1200 char (xavfsiz)
     const maxCodesToShow = 30;
     const codesToShow = usedCodes.slice(0, maxCodesToShow);
     const hasMore = usedCodes.length > maxCodesToShow;
@@ -42,13 +37,17 @@ viewPromoCodesScene.enter(async (ctx) => {
     message += `\n`;
 
     codesToShow.forEach((usage, index) => {
-      const maskedCode = maskPromoCode(usage.promoCode);
-      const date = new Date(usage.usedAt).toLocaleDateString("uz-UZ", {
+      // Show FULL code to user (no masking for own codes)
+      const fullCode = usage.promoCode;
+      const dateTime = new Date(usage.usedAt).toLocaleString("uz-UZ", {
         day: "2-digit",
         month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
 
-      message += `${index + 1}\. 🎟 \`${maskedCode}\` • ${date}\n`;
+      message += `${index + 1}\\. 🎟 \`${fullCode}\` • ${dateTime}\n`;
     });
 
     if (hasMore) {
@@ -56,17 +55,16 @@ viewPromoCodesScene.enter(async (ctx) => {
     }
 
     await ctx.reply(message, {
-      parse_mode: "Markdown",
+      parse_mode: "MarkdownV2",
       ...Markup.keyboard([["🔙 Profilga qaytish"], ["🏠 Asosiy menyu"]])
         .resize()
         .oneTime(),
     });
 
     // Keep the scene active so the button handlers below can respond
-    // User will press "🔙 Profilga qaytish" or "🏠 Asosiy menyu"
     return;
   } catch (error) {
-    console.error("Promo kodlarni ko'rsatishda xatolik:", error);
+    console.error("Error displaying promo codes:", error);
     await ctx.reply(
       "❌ Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.",
       mainMenuKeyboard()
@@ -99,8 +97,9 @@ viewPromoCodesScene.hears("🔙 Profilga qaytish", async (ctx) => {
 ${user.username ? `✈️ *Username:* @${user.username}` : ""}
 🆔 *Telegram ID:* \`${user.telegramId}\`
 📊 *Jami kodlar:* ${codeCount} ta
-📅 *Ro'yxatdan o'tgan sana:* ${new Date(user.registeredAt).toLocaleString(
-    "uz-UZ"
+📅 *Ro'yxatdan o'tgan:* ${new Date(user.registeredAt).toLocaleDateString(
+    "uz-UZ",
+    { year: "numeric", month: "long", day: "numeric" }
   )}
   `;
 

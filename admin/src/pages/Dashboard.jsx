@@ -2,8 +2,10 @@ import React from "react";
 import { Link, Routes, Route, Navigate } from "react-router-dom";
 import PromoCodes from "./Groups";
 import Stats from "./Stats";
-import Users from "./Users";
+import Users from "./UsersNew";
 import Broadcast from "./Broadcast";
+import Seasons from "./Seasons";
+import RandomWinner from "./RandomWinner";
 
 export default function Dashboard() {
   const logout = () => {
@@ -30,6 +32,28 @@ export default function Dashboard() {
         }}
       >
         <Link
+          to="/app/stats"
+          style={{
+            marginRight: 24,
+            padding: "8px 16px",
+            textDecoration: "none",
+            fontWeight: 500,
+          }}
+        >
+          📊 Statistika
+        </Link>
+        <Link
+          to="/app/seasons"
+          style={{
+            marginRight: 24,
+            padding: "8px 16px",
+            textDecoration: "none",
+            fontWeight: 500,
+          }}
+        >
+          🎭 Mavsumlar
+        </Link>
+        <Link
           to="/app/codes"
           style={{
             marginRight: 24,
@@ -52,7 +76,7 @@ export default function Dashboard() {
           👥 Foydalanuvchilar
         </Link>
         <Link
-          to="/app/broadcast"
+          to="/app/winner"
           style={{
             marginRight: 24,
             padding: "8px 16px",
@@ -60,26 +84,28 @@ export default function Dashboard() {
             fontWeight: 500,
           }}
         >
-          📢 Yangilik Yuborish
+          🎲 G'olib Tanlash
         </Link>
         <Link
-          to="/app/stats"
+          to="/app/broadcast"
           style={{
             padding: "8px 16px",
             textDecoration: "none",
             fontWeight: 500,
           }}
         >
-          📊 Statistika
+          📢 Yangilik Yuborish
         </Link>
       </nav>
 
       <Routes>
+        <Route path="/stats" element={<Stats />} />
+        <Route path="/seasons" element={<Seasons />} />
         <Route path="/codes" element={<PromoCodes />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/winner" element={<RandomWinner />} />
         <Route path="/broadcast" element={<Broadcast />} />
-        <Route path="/stats" element={<Stats />} />
-        <Route path="/" element={<Navigate to="/app/codes" replace />} />
+        <Route path="/" element={<Navigate to="/app/stats" replace />} />
       </Routes>
     </div>
   );

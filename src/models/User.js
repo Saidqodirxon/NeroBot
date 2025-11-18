@@ -22,15 +22,15 @@ const userSchema = new mongoose.Schema(
     },
     name: {
       type: String,
-      required: true,
+      default: null,
     },
     phone: {
       type: String,
-      required: true,
+      default: null,
     },
     region: {
       type: String,
-      required: true,
+      default: null,
     },
     usedPromoCode: {
       type: String,

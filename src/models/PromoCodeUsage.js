@@ -7,6 +7,12 @@ const promoCodeUsageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    seasonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Season",
+      required: true,
+      index: true,
+    },
     userName: {
       type: String,
       required: true,

@@ -33,7 +33,36 @@ export const auth = {
 };
 
 export const stats = {
-  get: () => instance.get("/stats"),
+  get: (seasonId) =>
+    instance.get(`/stats${seasonId ? `?seasonId=${seasonId}` : ""}`),
+};
+
+export const seasons = {
+  getAll: () => instance.get("/seasons"),
+  create: (data) => instance.post("/seasons", data),
+  update: (id, data) => instance.put(`/seasons/${id}`, data),
+  delete: (id) => instance.delete(`/seasons/${id}`),
+};
+
+export const users = {
+  getAll: (params) => instance.get("/users", { params }),
+  getDetails: (telegramId, seasonId) =>
+    instance.get(
+      `/users/${telegramId}${seasonId ? `?seasonId=${seasonId}` : ""}`
+    ),
+  exportHistory: (telegramId, seasonId) =>
+    instance.get(
+      `/export/user/${telegramId}${seasonId ? `?seasonId=${seasonId}` : ""}`,
+      {
+        responseType: "blob",
+      }
+    ),
+};
+
+export const promoCodes = {
+  getAll: (params) => instance.get("/promo-codes", { params }),
+  create: (data) => instance.post("/promo-codes", data),
+  delete: (code) => instance.delete(`/promo-codes/${code}`),
 };
 
 export const api = instance;

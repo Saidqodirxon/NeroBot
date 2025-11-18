@@ -9,6 +9,12 @@ const promoCodeSchema = new mongoose.Schema(
       index: true,
       uppercase: true,
     },
+    seasonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Season",
+      required: true,
+      index: true,
+    },
     description: {
       type: String,
       default: "",

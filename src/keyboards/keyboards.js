@@ -3,7 +3,7 @@ const { REGIONS } = require("../utils/regions");
 
 const mainMenuKeyboard = () => {
   return Markup.keyboard([
-    ["📝 Promokodni kiritish", "👤 Profilim"],
+    ["📝 Kod yuborish", "👤 Profilim"],
     ["🛠 Qo'llab-quvvatlash bilan bog'laning"],
   ]).resize();
 };

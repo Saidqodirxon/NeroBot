@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api } from "../services/api";
+import { promoCodes, seasons } from "../services/api";
 
 export default function PromoCodes() {
   const [list, setList] = useState([]);
@@ -8,14 +8,23 @@ export default function PromoCodes() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState("all"); // all, used, unused
+  const [seasonsList, setSeasonsList] = useState([]);
+  const [selectedSeason, setSelectedSeason] = useState("");
+  const [seasonFilter, setSeasonFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const params =
-        filter !== "all" ? { used: filter === "used" ? "true" : "false" } : {};
-      const res = await api.get("/promo-codes", { params });
+      const params = {};
+      if (filter !== "all") {
+        params.used = filter === "used" ? "true" : "false";
+      }
+      if (seasonFilter !== "all") {
+        params.seasonId = seasonFilter;
+      }
+      const res = await promoCodes.getAll(params);
       setList(res.data.data || []);
     } catch (err) {
       console.error("PromoCodes load error:", err);
@@ -24,13 +33,28 @@ export default function PromoCodes() {
     setLoading(false);
   };
 
+  const loadSeasons = async () => {
+    try {
+      const res = await seasons.getAll();
+      setSeasonsList(res.data.data || []);
+    } catch (err) {
+      console.error("Mavsumlarni yuklab bo'lmadi:", err);
+    }
+  };
+
   useEffect(() => {
+    loadSeasons();
     load();
-  }, [filter]);
+  }, [filter, seasonFilter]);
 
   const create = async () => {
     if (!codes.trim()) {
       alert("Iltimos, kod(lar) kiriting");
+      return;
+    }
+
+    if (!selectedSeason) {
+      alert("Iltimos, mavsumni tanlang");
       return;
     }
 
@@ -39,9 +63,14 @@ export default function PromoCodes() {
         .split("\n")
         .map((c) => c.trim())
         .filter(Boolean);
-      await api.post("/promo-codes", { codes: codeArray, description });
+      await promoCodes.create({
+        codes: codeArray,
+        description,
+        seasonId: selectedSeason,
+      });
       setCodes("");
       setDescription("");
+      setSelectedSeason("");
       load();
       alert("Kodlar qo'shildi!");
     } catch (err) {
@@ -53,7 +82,7 @@ export default function PromoCodes() {
     if (!confirm(`"${code}" kodni o'chirishga aminmisiz?`)) return;
 
     try {
-      await api.delete(`/promo-codes/${code}`);
+      await promoCodes.delete(code);
       load();
     } catch (err) {
       alert(err.response?.data?.message || "Xato");
@@ -100,6 +129,21 @@ export default function PromoCodes() {
         }}
       >
         <h4 style={{ marginTop: 0 }}>Yangi kodlar qo'shish</h4>
+
+        <select
+          className="input"
+          value={selectedSeason}
+          onChange={(e) => setSelectedSeason(e.target.value)}
+          style={{ width: "100%", marginBottom: 8 }}
+        >
+          <option value="">Mavsumni tanlang *</option>
+          {seasonsList.map((s) => (
+            <option key={s._id} value={s._id}>
+              {s.name} {s.isActive ? "(Faol)" : ""}
+            </option>
+          ))}
+        </select>
+
         <textarea
           className="input"
           placeholder="Kodlarni har birini yangi qatorga yozing&#10;Masalan:&#10;ABC123&#10;XYZ789&#10;TEST456"
@@ -127,8 +171,18 @@ export default function PromoCodes() {
           gap: 12,
           marginBottom: 12,
           alignItems: "center",
+          flexWrap: "wrap",
         }}
       >
+        <input
+          type="text"
+          className="input"
+          placeholder="🔍 Kod qidirish..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ width: 200, fontFamily: "monospace" }}
+        />
+
         <select
           className="input"
           value={filter}
@@ -138,6 +192,20 @@ export default function PromoCodes() {
           <option value="all">Barcha kodlar</option>
           <option value="used">Ishlatilgan</option>
           <option value="unused">Ishlatilmagan</option>
+        </select>
+
+        <select
+          className="input"
+          value={seasonFilter}
+          onChange={(e) => setSeasonFilter(e.target.value)}
+          style={{ width: 200 }}
+        >
+          <option value="all">Barcha mavsumlar</option>
+          {seasonsList.map((s) => (
+            <option key={s._id} value={s._id}>
+              {s.name}
+            </option>
+          ))}
         </select>
 
         <button className="button" onClick={exportCodes}>
@@ -167,6 +235,7 @@ export default function PromoCodes() {
           <thead>
             <tr>
               <th>Kod</th>
+              <th>Mavsum</th>
               <th>Tavsif</th>
               <th>Holat</th>
               <th>Ishlatilgan sana</th>
@@ -176,58 +245,69 @@ export default function PromoCodes() {
             </tr>
           </thead>
           <tbody>
-            {list.length === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ textAlign: "center", padding: 24 }}>
-                  Kodlar topilmadi
-                </td>
-              </tr>
-            ) : (
-              list.map((code) => (
-                <tr key={code._id}>
-                  <td style={{ fontFamily: "monospace", fontWeight: "bold" }}>
-                    {code.code}
-                  </td>
-                  <td>{code.description || "-"}</td>
-                  <td>
-                    <span
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: 4,
-                        background: code.isUsed ? "#e8f5e9" : "#fff3e0",
-                        color: code.isUsed ? "#2e7d32" : "#e65100",
-                        fontSize: 12,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {code.isUsed ? "✓ Ishlatilgan" : "⏳ Ishlatilmagan"}
-                    </span>
-                  </td>
-                  <td>
-                    {code.usedAt
-                      ? new Date(code.usedAt).toLocaleString("uz-UZ")
-                      : "-"}
-                  </td>
-                  <td>{code.usedByName || "-"}</td>
-                  <td>{code.usedByPhone || "-"}</td>
-                  <td>
-                    {!code.isUsed && (
-                      <button
-                        className="button"
-                        onClick={() => deleteCode(code.code)}
-                        style={{
-                          background: "#f44336",
-                          padding: "4px 12px",
-                          fontSize: 13,
-                        }}
-                      >
-                        O'chirish
-                      </button>
-                    )}
+            {(() => {
+              const filteredList = searchQuery
+                ? list.filter((code) =>
+                    code.code.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                : list;
+
+              return filteredList.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: "center", padding: 24 }}>
+                    {searchQuery
+                      ? "Qidiruv bo'yicha kod topilmadi"
+                      : "Kodlar topilmadi"}
                   </td>
                 </tr>
-              ))
-            )}
+              ) : (
+                filteredList.map((code) => (
+                  <tr key={code._id}>
+                    <td style={{ fontFamily: "monospace", fontWeight: "bold" }}>
+                      {code.code}
+                    </td>
+                    <td>{code.seasonId?.name || "-"}</td>
+                    <td>{code.description || "-"}</td>
+                    <td>
+                      <span
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: 4,
+                          background: code.isUsed ? "#e8f5e9" : "#fff3e0",
+                          color: code.isUsed ? "#2e7d32" : "#e65100",
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {code.isUsed ? "✓ Ishlatilgan" : "⏳ Ishlatilmagan"}
+                      </span>
+                    </td>
+                    <td>
+                      {code.usedAt
+                        ? new Date(code.usedAt).toLocaleString("uz-UZ")
+                        : "-"}
+                    </td>
+                    <td>{code.usedByName || "-"}</td>
+                    <td>{code.usedByPhone || "-"}</td>
+                    <td>
+                      {!code.isUsed && (
+                        <button
+                          className="button"
+                          onClick={() => deleteCode(code.code)}
+                          style={{
+                            background: "#f44336",
+                            padding: "4px 12px",
+                            fontSize: 13,
+                          }}
+                        >
+                          O'chirish
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              );
+            })()}
           </tbody>
         </table>
       )}

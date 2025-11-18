@@ -26,7 +26,10 @@ export default function Broadcast() {
     setIsSending(true);
 
     try {
-      const res = await api.post("/broadcast", { message, region });
+      const res = await api.post("/broadcast", {
+        message,
+        region,
+      });
 
       if (res.data.success) {
         alert(
@@ -118,10 +121,10 @@ export default function Broadcast() {
       >
         <h4 style={{ marginTop: 0 }}>⚠️ Eslatma:</h4>
         <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+          <li>Xabar avtomatik ravishda admin guruhiga ham yuboriladi</li>
           <li>Telegram rate limit: 30 xabar/soniya</li>
           <li>Xabar yuborish vaqt olishi mumkin</li>
           <li>Bloklagan foydalanuvchilarga xabar ketmaydi</li>
-          <li>Jarayon tugaguncha sahifadan chiqmang</li>
         </ul>
       </div>
     </div>

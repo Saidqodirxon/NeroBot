@@ -347,7 +347,7 @@ router.post("/broadcast", jwtAuth, async (req, res) => {
     }
 
     // Bot instance'ni olish
-    const { bot } = require("../index");
+    const { bot } = require("../nerobot");
 
     // Darhol javob qaytarish
     res.json({

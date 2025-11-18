@@ -4,10 +4,10 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const connectDB = require("./config/database");
-const registrationScene = require("./scenes/registration");
+const registrationScene = require("./scenes/registrationNew");
 const editProfileScene = require("./scenes/editProfile");
 const viewPromoCodesScene = require("./scenes/viewPromoCodes");
-const apiRoutes = require("./api/routes");
+const apiRoutes = require("./api/routesNew");
 const authRoutes = require("./api/auth");
 const { mainMenuKeyboard } = require("./keyboards/keyboards");
 const {
@@ -69,37 +69,38 @@ bot.help(async (ctx) => {
   });
 });
 
-// "📝 Promokodni kiritish" tugmasi
-bot.hears("📝 Promokodni kiritish", async (ctx) => {
+// "📝 Kod yuborish" tugmasi
+bot.hears("📝 Kod yuborish", async (ctx) => {
   // Har doim registration'ga kirish - user bir necha kod ishlata oladi
   await ctx.scene.enter("registration");
 });
 
 // "Profilim" tugmasi - ro'yxatdan o'tmagan bo'lsa registration, o'tgan bo'lsa profil + edit
 bot.hears("👤 Profilim", async (ctx) => {
-  const User = require("./models/User");
-  const user = await User.findOne({ telegramId: ctx.from.id });
+  try {
+    const User = require("./models/User");
+    const user = await User.findOne({ telegramId: ctx.from.id });
 
-  if (!user) {
-    // Ro'yxatdan o'tmagan - registrationga yo'naltirish
-    await ctx.reply(
-      "❌ *Siz hali ro'yxatdan o'tmagansiz!*\n\n" +
-        "Ro'yxatdan o'tish uchun 📝 *Promokodni kiritish* tugmasini bosing.",
-      {
-        parse_mode: "Markdown",
-        ...mainMenuKeyboard(),
-      }
-    );
-    return;
-  }
+    if (!user) {
+      // Ro'yxatdan o'tmagan - registrationga yo'naltirish
+      await ctx.reply(
+        "❌ *Siz hali ro'yxatdan o'tmagansiz!*\n\n" +
+          "Ro'yxatdan o'tish uchun 📝 *Kod yuborish* tugmasini bosing.",
+        {
+          parse_mode: "Markdown",
+          ...mainMenuKeyboard(),
+        }
+      );
+      return;
+    }
 
-  // Ro'yxatdan o'tgan - profil ko'rsatish va edit tugmasi
-  const PromoCodeUsage = require("./models/PromoCodeUsage");
-  const codeCount = await PromoCodeUsage.countDocuments({
-    telegramId: ctx.from.id,
-  });
+    // Ro'yxatdan o'tgan - profil ko'rsatish va edit tugmasi
+    const PromoCodeUsage = require("./models/PromoCodeUsage");
+    const codeCount = await PromoCodeUsage.countDocuments({
+      telegramId: ctx.from.id,
+    });
 
-  const profileInfo = `
+    const profileInfo = `
 👤 *Sizning Profilingiz*
 
 📝 *Ism:* ${user.name}
@@ -109,18 +110,25 @@ ${user.username ? `✈️ *Username:* @${user.username}` : ""}
 🆔 *Telegram ID:* \`${user.telegramId}\`
 📊 *Jami kodlar:* ${codeCount} ta
 📅 *Ro'yxatdan o'tgan sana:* ${new Date(user.registeredAt).toLocaleString(
-    "uz-UZ"
-  )}
+      "uz-UZ"
+    )}
   `;
 
-  await ctx.reply(profileInfo, {
-    parse_mode: "Markdown",
-    ...Markup.keyboard([
-      ["🎟 Barcha kodlarimni ko'rish"],
-      ["✏️ Ma'lumotlarni o'zgartirish"],
-      ["🔙 Asosiy menyu"],
-    ]).resize(),
-  });
+    await ctx.reply(profileInfo, {
+      parse_mode: "Markdown",
+      ...Markup.keyboard([
+        ["🎟 Barcha kodlarimni ko'rish"],
+        ["✏️ Ma'lumotlarni o'zgartirish"],
+        ["🏠 Asosiy menyu"],
+      ]).resize(),
+    });
+  } catch (error) {
+    console.error("Profile loading error:", error);
+    await ctx.reply(
+      "❌ Profilni yuklashda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.",
+      mainMenuKeyboard()
+    );
+  }
 });
 
 // "✏️ Ma'lumotlarni o'zgartirish" tugmasi
@@ -140,6 +148,11 @@ bot.hears("🎟 Barcha kodlarimni ko'rish", async (ctx) => {
 
 // "Asosiy menyu" tugmasi
 bot.hears("🔙 Asosiy menyu", async (ctx) => {
+  await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
+});
+
+// "🏠 Asosiy menyu" tugmasi
+bot.hears("🏠 Asosiy menyu", async (ctx) => {
   await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
 });
 

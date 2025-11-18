@@ -1,14 +1,9 @@
 const WELCOME_MESSAGE = `
-🎉 *Xush kelibsiz Nero Bonus botiga!*
+👋 *Nero rasmiy botiga xush kelibsiz!*
 
-Bu bot orqali siz chekdagi promo kodni tekshirishingiz va ro'yxatdan o'tishingiz mumkin.
+Biz promo-kodlarni tekshirib, sovrinli o'yinlar va bonus dasturlarida ishtirok etishingiz uchun ro'yxatdan o'tkazamiz.
 
-📋 *Qanday ishlaydi?*
-1️⃣ Ma'lumotlaringizni kiriting (ism, telefon, viloyat)
-2️⃣ Chekdagi promo kodni yuboring
-3️⃣ Kod tasdiqlanadi va siz ro'yxatga olinasiz
-
-🎯 Boshlash uchun *"📝 Promokodni kiritish"* tugmasini bosing.
+🎁 Kod yuboring — NeuroBot uni qabul qiladi va sizni o'yinga qo'shadi. Qancha ko'p kod, shuncha katta imkoniyat! 🚀🔥
 `;
 
 const HELP_MESSAGE = `
@@ -47,29 +42,34 @@ Agar sizda savollar yoki muammolar bo'lsa, qo'llab-quvvatlash xizmatiga murojaat
 Tez orada sizga javob beramiz!
 `;
 
-const CODE_VERIFIED = `
-✅ *Tabriklaymiz!*
+const CODE_VERIFIED = (name, code, phone) => `
+🎉 *Rahmat, ${name}!*
 
-Ma'lumotlaringiz muvaffaqiyatli ro'yxatga olindi.
-Adminlar sizning ma'lumotlaringizni ko'rib chiqishadi.
+Promo-kodingiz \`${code}\` sizning ${phone} raqamingizga ro'yxatdan o'tkazildi. Siz o'yinda ishtirok etmoqdasiz. Omad tilaymiz! ✨
 `;
 
-const CODE_NOT_FOUND = `
-❌ *Bunday kod topilmadi*
+const CODE_NOT_FOUND = (code) => `
+❌ *${code} kodi topilmadi.*
 
-Iltimos, kiritgan ma'lumotlaringizni tekshiring va qaytadan urinib ko'ring.
+To'g'riligini tekshirib, yana yuboring.
 `;
 
-const CODE_ALREADY_USED = (userName, userPhone) => `
-⚠️ *Ushbu kod allaqachon ishlatilgan*
+const CODE_ALREADY_USED = (code) => `
+⚠️ *${code} kodi boshqa foydalanuvchi tomonidan allaqachon ishlatilgan.*
 
-📋 Kod ishlatgan foydalanuvchi:
-👤 Ism: ${userName}
-📱 Telefon: ${userPhone}
+Batafsil ma'lumot uchun qo'llab-quvvatlash xizmatiga yozing.
+`;
 
-Agar bu xato deb hisoblasangiz, texnik yordam bilan bog'laning: @${
-  process.env.SUPPORT_USERNAME || "admin"
-}
+const REGISTRATION_SUCCESS = (name) => `
+✅ *${name}, siz muvaffaqiyatli ro'yxatdan o'tdingiz!*
+
+Endi promo-kodlaringizni yuborishingiz mumkin — «Kod yuborish» tugmasini bosing yoki kodni shu yerga yozib yuboring. Omad! 🍀
+`;
+
+const PROMO_CODE_PROMPT = `
+🔢 *Promo-kodingizni yuboring.*
+
+Misol: ABC12345
 `;
 
 module.exports = {
@@ -79,4 +79,6 @@ module.exports = {
   CODE_VERIFIED,
   CODE_NOT_FOUND,
   CODE_ALREADY_USED,
+  REGISTRATION_SUCCESS,
+  PROMO_CODE_PROMPT,
 };
