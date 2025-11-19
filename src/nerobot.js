@@ -100,24 +100,26 @@ bot.hears("👤 Profilim", async (ctx) => {
       telegramId: ctx.from.id,
     });
 
-    const profileInfo = `
-👤 *Sizning Profilingiz*
+    const registeredDate = new Date(user.registeredAt).toLocaleDateString(
+      "uz-UZ",
+      { year: "numeric", month: "long", day: "numeric" }
+    );
 
-📝 *Ism:* ${user.name}
-📱 *Telefon:* ${user.phone}
-🗺 *Viloyat:* ${user.region}
-${user.username ? `✈️ *Username:* @${user.username}` : ""}
-🆔 *Telegram ID:* \`${user.telegramId}\`
-📊 *Jami kodlar:* ${codeCount} ta
-📅 *Ro'yxatdan o'tgan sana:* ${new Date(user.registeredAt).toLocaleString(
-      "uz-UZ"
-    )}
+    const profileInfo = `
+👤 <b>Sizning Profilingiz</b>
+
+📝 <b>Ism:</b> ${user.name}
+📱 <b>Telefon:</b> ${user.phone}
+🗺 <b>Viloyat:</b> ${user.region}
+${user.username ? `✈️ <b>Username:</b> @${user.username}` : ""}
+🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>
+📊 <b>Jami kodlar:</b> ${codeCount} ta
+📅 <b>Ro'yxatdan o'tgan:</b> ${registeredDate}
   `;
 
     await ctx.reply(profileInfo, {
-      parse_mode: "Markdown",
+      parse_mode: "HTML",
       ...Markup.keyboard([
-        ["🎟 Barcha kodlarimni ko'rish"],
         ["✏️ Ma'lumotlarni o'zgartirish"],
         ["🏠 Asosiy menyu"],
       ]).resize(),
@@ -164,7 +166,7 @@ bot.hears("🔙 Orqaga", async (ctx) => {
 // "Qo'llab-quvvatlash" tugmasi
 bot.hears("🛠 Qo'llab-quvvatlash bilan bog'laning", async (ctx) => {
   await ctx.reply(SUPPORT_MESSAGE, {
-    parse_mode: "Markdown",
+    parse_mode: "HTML",
   });
 });
 

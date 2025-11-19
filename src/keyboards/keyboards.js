@@ -4,7 +4,7 @@ const { REGIONS } = require("../utils/regions");
 const mainMenuKeyboard = () => {
   return Markup.keyboard([
     ["📝 Kod yuborish", "👤 Profilim"],
-    ["🛠 Qo'llab-quvvatlash bilan bog'laning"],
+    ["🎟 Barcha kodlarimni ko'rish", "🛠 Qo'llab-quvvatlash bilan bog'laning"],
   ]).resize();
 };
 

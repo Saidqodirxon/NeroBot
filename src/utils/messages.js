@@ -33,7 +33,7 @@ const HELP_MESSAGE = `
 `;
 
 const SUPPORT_MESSAGE = `
-🛠 *Texnik yordam*
+🛠 <b>Texnik yordam</b>
 
 Agar sizda savollar yoki muammolar bo'lsa, qo'llab-quvvatlash xizmatiga murojaat qiling:
 

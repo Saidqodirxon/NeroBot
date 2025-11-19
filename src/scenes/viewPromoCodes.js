@@ -88,25 +88,26 @@ viewPromoCodesScene.hears("🔙 Profilga qaytish", async (ctx) => {
     telegramId: ctx.from.id,
   });
 
-  const profileInfo = `
-👤 *Sizning Profilingiz*
-
-📝 *Ism:* ${user.name}
-📱 *Telefon:* ${user.phone}
-🗺 *Viloyat:* ${user.region}
-${user.username ? `✈️ *Username:* @${user.username}` : ""}
-🆔 *Telegram ID:* \`${user.telegramId}\`
-📊 *Jami kodlar:* ${codeCount} ta
-📅 *Ro'yxatdan o'tgan:* ${new Date(user.registeredAt).toLocaleDateString(
+  const registeredDate = new Date(user.registeredAt).toLocaleDateString(
     "uz-UZ",
     { year: "numeric", month: "long", day: "numeric" }
-  )}
+  );
+
+  const profileInfo = `
+👤 <b>Sizning Profilingiz</b>
+
+📝 <b>Ism:</b> ${user.name}
+📱 <b>Telefon:</b> ${user.phone}
+🗺 <b>Viloyat:</b> ${user.region}
+${user.username ? `✈️ <b>Username:</b> @${user.username}` : ""}
+🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>
+📊 <b>Jami kodlar:</b> ${codeCount} ta
+📅 <b>Ro'yxatdan o'tgan:</b> ${registeredDate}
   `;
 
   await ctx.reply(profileInfo, {
-    parse_mode: "Markdown",
+    parse_mode: "HTML",
     ...Markup.keyboard([
-      ["🎟 Barcha kodlarimni ko'rish"],
       ["✏️ Ma'lumotlarni o'zgartirish"],
       ["🏠 Asosiy menyu"],
     ]).resize(),

@@ -53,7 +53,7 @@ const registrationScene = new Scenes.WizardScene(
 
       ctx.wizard.state.name = ctx.message.text.trim();
       await ctx.reply(
-        "📱 *Telefon raqamingizni yuboring*\n\nTugmani bosing yoki raqamni kiriting (masalan: +998901234567):",
+        "📱 *Telefon raqamingizni yuboring*\n\n Pastdagi tugmani bosing:",
         {
           parse_mode: "Markdown",
           ...contactKeyboard(),
