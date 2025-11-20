@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, seasons } from "../services/api";
 
 export default function RandomWinner() {
-  const [count, setCount] = useState(1);
+  const [count, setCount] = useState(10);
   const [region, setRegion] = useState("");
   const [seasonId, setSeasonId] = useState("");
   const [seasonsList, setSeasonsList] = useState([]);
@@ -10,6 +10,8 @@ export default function RandomWinner() {
   const [loading, setLoading] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentDisplay, setCurrentDisplay] = useState([]);
+  const [revealedPhones, setRevealedPhones] = useState({});
+  const [revealedIds, setRevealedIds] = useState({});
 
   const REGIONS = [
     "Toshkent",
@@ -49,6 +51,8 @@ export default function RandomWinner() {
     setLoading(true);
     setIsAnimating(true);
     setWinners([]);
+    setRevealedPhones({});
+    setRevealedIds({});
 
     try {
       const params = { count };
@@ -73,6 +77,8 @@ export default function RandomWinner() {
             phone: "+998 XX XXX XX XX",
             region: REGIONS[Math.floor(Math.random() * REGIONS.length)],
             telegramId: "--------",
+            promoCode: "XXXXXX",
+            usedAt: new Date(),
           }));
 
         setCurrentDisplay(fakeUsers);
@@ -90,6 +96,38 @@ export default function RandomWinner() {
       setIsAnimating(false);
     }
     setLoading(false);
+  };
+
+  const maskPhone = (phone) => {
+    if (!phone) return "";
+    const cleaned = phone.replace(/\D/g, "");
+    if (cleaned.length >= 4) {
+      return phone.slice(0, -4) + "****";
+    }
+    return phone;
+  };
+
+  const maskTelegramId = (id) => {
+    if (!id) return "";
+    const idStr = id.toString();
+    if (idStr.length >= 4) {
+      return idStr.slice(0, -4) + "****";
+    }
+    return idStr;
+  };
+
+  const togglePhoneReveal = (winnerId) => {
+    setRevealedPhones((prev) => ({
+      ...prev,
+      [winnerId]: !prev[winnerId],
+    }));
+  };
+
+  const toggleIdReveal = (winnerId) => {
+    setRevealedIds((prev) => ({
+      ...prev,
+      [winnerId]: !prev[winnerId],
+    }));
   };
 
   const displayList = isAnimating ? currentDisplay : winners;
@@ -248,19 +286,114 @@ export default function RandomWinner() {
                     fontFamily: "monospace",
                   }}
                 >
-                  <strong>📱 Telefon:</strong> {winner.phone}
+                  <strong>📱 Telefon:</strong>{" "}
+                  {!isAnimating ? (
+                    <span
+                      onClick={() => togglePhoneReveal(winner._id)}
+                      style={{
+                        cursor: "pointer",
+                        color: "#1976d2",
+                        textDecoration: "underline",
+                        userSelect: "none",
+                      }}
+                      title="Ko'rish uchun bosing"
+                    >
+                      {revealedPhones[winner._id]
+                        ? winner.phone
+                        : maskPhone(winner.phone)}
+                    </span>
+                  ) : (
+                    winner.phone
+                  )}
                 </div>
                 <div style={{ fontSize: 14, marginBottom: 4 }}>
                   <strong>🗺 Viloyat:</strong> {winner.region}
                 </div>
                 {winner.username && (
                   <div style={{ fontSize: 14, marginBottom: 4 }}>
-                    <strong>✈️ Username:</strong> @{winner.username}
+                    <strong>✈️ Username:</strong>{" "}
+                    {!isAnimating ? (
+                      <a
+                        href={`tg://resolve?domain=${winner.username}`}
+                        style={{ color: "#1976d2", textDecoration: "none" }}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        @{winner.username}
+                      </a>
+                    ) : (
+                      `@${winner.username}`
+                    )}
                   </div>
                 )}
-                <div style={{ fontSize: 14, fontFamily: "monospace" }}>
-                  <strong>🆔 Telegram ID:</strong> {winner.telegramId}
+                <div
+                  style={{
+                    fontSize: 14,
+                    marginBottom: 4,
+                    fontFamily: "monospace",
+                  }}
+                >
+                  <strong>🆔 Telegram ID:</strong>{" "}
+                  {!isAnimating ? (
+                    <span
+                      onClick={() => toggleIdReveal(winner._id)}
+                      style={{
+                        cursor: "pointer",
+                        color: "#1976d2",
+                        textDecoration: "underline",
+                        userSelect: "none",
+                      }}
+                      title="Ko'rish uchun bosing"
+                    >
+                      {revealedIds[winner._id]
+                        ? winner.telegramId
+                        : maskTelegramId(winner.telegramId)}
+                    </span>
+                  ) : (
+                    winner.telegramId
+                  )}
                 </div>
+                {winner.promoCode && !isAnimating && (
+                  <>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        marginBottom: 4,
+                        marginTop: 8,
+                        paddingTop: 8,
+                        borderTop: "1px solid #4caf50",
+                      }}
+                    >
+                      <strong>🎟 Tanlangan Kod:</strong>{" "}
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          background: "#fff",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {winner.promoCode}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#666" }}>
+                      <strong>📅 Kiritilgan:</strong>{" "}
+                      {new Date(winner.usedAt).toLocaleString("uz-UZ", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                    {winner.seasonName && winner.seasonName !== "-" && (
+                      <div style={{ fontSize: 12, color: "#666" }}>
+                        <strong>🎭 Mavsum:</strong> {winner.seasonName}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </div>

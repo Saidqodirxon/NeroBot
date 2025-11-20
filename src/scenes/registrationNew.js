@@ -170,6 +170,18 @@ const registrationScene = new Scenes.WizardScene(
         parse_mode: "Markdown",
       });
 
+      // Send Instagram subscription message
+      await ctx.reply(
+        "<b>Bizning Instagram-akkauntimizga obuna bo'lishni unutmang! ✨</b>\n\n" +
+          "Barcha o'yinlar, aksiyalar va eksklyuziv sovg'alar faqat u yerda e'lon qilinadi. 🎁\n" +
+          "Maxsus bonuslar va kutilmagan sovg'alarni qo'ldan boy bermaslik uchun hoziroq obuna bo'ling!\n\n" +
+          '📲 <a href="https://www.instagram.com/nero.uzb/">Instagram: @nero.uzb</a>',
+        {
+          parse_mode: "HTML",
+          disable_web_page_preview: false,
+        }
+      );
+
       // Now ask for promo code
       await ctx.reply(PROMO_CODE_PROMPT, {
         parse_mode: "Markdown",
@@ -278,6 +290,7 @@ const registrationScene = new Scenes.WizardScene(
         "seasonId"
       );
 
+      // Check if code exists
       if (!promoCode) {
         await ctx.reply(CODE_NOT_FOUND(code), {
           parse_mode: "Markdown",
@@ -288,12 +301,42 @@ const registrationScene = new Scenes.WizardScene(
         try {
           await ctx.telegram.sendMessage(
             process.env.ADMIN_GROUP_ID,
-            `⚠️ *Topilmagan kod kiritildi\\!*\n\n` +
+            `⚠️ *Topilmagan kod kiritildi\!*\n\n` +
               `👤 User: ${escapeMarkdown(user.name)}\n` +
               `📱 Telefon: ${escapeMarkdown(user.phone)}\n` +
               "🎟 Kod: `" +
               escapeMarkdown(code) +
               "`\n" +
+              `⏰ Vaqt: ${escapeMarkdown(new Date().toLocaleString("uz-UZ"))}`,
+            { parse_mode: "MarkdownV2" }
+          );
+        } catch (err) {
+          console.error("Admin notification error:", err);
+        }
+
+        return await ctx.scene.leave();
+      }
+
+      // Check if season is active - if not, treat as "code not found"
+      if (promoCode.seasonId && !promoCode.seasonId.isActive) {
+        await ctx.reply(CODE_NOT_FOUND(code), {
+          parse_mode: "Markdown",
+          ...mainMenuKeyboard(),
+        });
+
+        // Notify admin about inactive season code attempt
+        try {
+          await ctx.telegram.sendMessage(
+            process.env.ADMIN_GROUP_ID,
+            `⚠️ *Noaktiv mavsum kodi kiritildi\\!*\n\n` +
+              `👤 User: ${escapeMarkdown(user.name)}\n` +
+              `📱 Telefon: ${escapeMarkdown(user.phone)}\n` +
+              "🎟 Kod: `" +
+              escapeMarkdown(code) +
+              "`\n" +
+              `🎭 Mavsum: ${escapeMarkdown(
+                promoCode.seasonId.name || "N/A"
+              )}\n` +
               `⏰ Vaqt: ${escapeMarkdown(new Date().toLocaleString("uz-UZ"))}`,
             { parse_mode: "MarkdownV2" }
           );

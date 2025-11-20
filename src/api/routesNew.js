@@ -1,19 +1,76 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const PromoCode = require("../models/PromoCode");
 const User = require("../models/User");
 const PromoCodeUsage = require("../models/PromoCodeUsage");
 const Season = require("../models/Season");
+const Prize = require("../models/Prize");
 const { authMiddleware: jwtAuth } = require("../middleware/auth");
 const { sendBroadcast } = require("../utils/broadcastNew");
 const XLSX = require("xlsx");
+
+// Multer storage configuration for prize images
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, "../../uploads/prizes");
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(
+      null,
+      "prize-" + uniqueSuffix + path.extname(file.originalname).toLowerCase()
+    );
+  },
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(
+      path.extname(file.originalname).toLowerCase()
+    );
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(
+        new Error("Faqat rasm fayllari (JPEG, PNG, GIF, WEBP) qabul qilinadi")
+      );
+    }
+  },
+});
+
+// Telegram bot instance (for sending notifications)
+let botInstance = null;
+const setBotInstance = (bot) => {
+  botInstance = bot;
+};
+
+// Helper function to escape MarkdownV2
+const escapeMarkdown = (text) => {
+  if (!text) return "";
+  return text.toString().replace(/[_*\[\]()~>#+\-=|{}.!']/g, "\\$&");
+};
 
 // ==================== SEASON MANAGEMENT ====================
 
 // GET: Get all seasons
 router.get("/seasons", jwtAuth, async (req, res) => {
   try {
-    const seasons = await Season.find().sort({ startDate: -1 });
+    const seasons = await Season.find().sort({ createdAt: -1 });
     res.json({
       success: true,
       data: seasons,
@@ -29,20 +86,17 @@ router.post("/seasons", jwtAuth, async (req, res) => {
   try {
     const { name, description, startDate, endDate, isActive } = req.body;
 
-    if (!name || !startDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Mavsum nomi va boshlanish sanasi talab qilinadi",
-      });
-    }
-
-    const season = await Season.create({
-      name,
+    // name and startDate are optional now
+    const seasonData = {
+      name: name || "",
       description: description || "",
-      startDate,
-      endDate: endDate || null,
       isActive: isActive !== undefined ? isActive : true,
-    });
+    };
+
+    if (startDate) seasonData.startDate = startDate;
+    if (endDate) seasonData.endDate = endDate;
+
+    const season = await Season.create(seasonData);
 
     res.json({
       success: true,
@@ -110,6 +164,166 @@ router.delete("/seasons/:id", jwtAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("Delete season error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ==================== PRIZE MANAGEMENT ====================
+
+// POST: Upload prize image
+router.post(
+  "/prizes/upload",
+  jwtAuth,
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Rasm yuklanmadi",
+        });
+      }
+
+      // Return the file URL
+      const imageUrl = `/uploads/prizes/${req.file.filename}`;
+
+      res.json({
+        success: true,
+        message: "Rasm muvaffaqiyatli yuklandi",
+        data: {
+          filename: req.file.filename,
+          imageUrl: imageUrl,
+          fullUrl: `${req.protocol}://${req.get("host")}${imageUrl}`,
+        },
+      });
+    } catch (error) {
+      console.error("Upload image error:", error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Rasm yuklashda xatolik",
+      });
+    }
+  }
+);
+
+// GET: Get all prizes
+router.get("/prizes", jwtAuth, async (req, res) => {
+  try {
+    const { seasonId } = req.query;
+    const filter = {};
+    if (seasonId && seasonId !== "all") {
+      filter.seasonId = seasonId;
+    }
+
+    const prizes = await Prize.find(filter)
+      .populate("seasonId")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: prizes,
+    });
+  } catch (error) {
+    console.error("Get prizes error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST: Create new prize
+router.post("/prizes", jwtAuth, async (req, res) => {
+  try {
+    const { name, description, imageUrl, seasonId, isActive } = req.body;
+
+    if (!name || !imageUrl || !seasonId) {
+      return res.status(400).json({
+        success: false,
+        message: "Nomi, rasm va mavsum talab qilinadi",
+      });
+    }
+
+    const prize = await Prize.create({
+      name,
+      description: description || "",
+      imageUrl,
+      seasonId,
+      isActive: isActive !== undefined ? isActive : true,
+    });
+
+    res.json({
+      success: true,
+      message: "Sovg'a yaratildi",
+      data: prize,
+    });
+  } catch (error) {
+    console.error("Create prize error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// PUT: Update prize
+router.put("/prizes/:id", jwtAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, imageUrl, seasonId, isActive } = req.body;
+
+    const prize = await Prize.findByIdAndUpdate(
+      id,
+      { name, description, imageUrl, seasonId, isActive },
+      { new: true }
+    );
+
+    if (!prize) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Sovg'a topilmadi" });
+    }
+
+    res.json({
+      success: true,
+      message: "Sovg'a yangilandi",
+      data: prize,
+    });
+  } catch (error) {
+    console.error("Update prize error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// DELETE: Delete prize
+router.delete("/prizes/:id", jwtAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const prize = await Prize.findByIdAndDelete(id);
+
+    if (!prize) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Sovg'a topilmadi" });
+    }
+
+    res.json({
+      success: true,
+      message: "Sovg'a o'chirildi",
+    });
+  } catch (error) {
+    console.error("Delete prize error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// GET: Get active prizes for bot (public endpoint, no auth)
+router.get("/public/prizes", async (req, res) => {
+  try {
+    const prizes = await Prize.find({ isActive: true })
+      .populate("seasonId")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: prizes,
+    });
+  } catch (error) {
+    console.error("Get public prizes error:", error);
     res.status(500).json({ success: false, message: "Server xatosi" });
   }
 });
@@ -575,9 +789,9 @@ router.get("/export/user/:telegramId", jwtAuth, async (req, res) => {
 // POST: Random winner selection
 router.post("/random-winner", jwtAuth, async (req, res) => {
   try {
-    const { region, count = 1, seasonId } = req.body;
+    const { region, count = 10, seasonId } = req.body;
 
-    // Filter for users who used codes
+    // Filter for promo code usage records
     const usageFilter = {};
     if (region && region !== "all") {
       usageFilter.userRegion = region;
@@ -586,41 +800,182 @@ router.post("/random-winner", jwtAuth, async (req, res) => {
       usageFilter.seasonId = seasonId;
     }
 
-    // Get unique telegram IDs from PromoCodeUsage
-    const usageRecords = await PromoCodeUsage.find(usageFilter).distinct(
-      "telegramId"
-    );
+    // Get all promo code usage records matching filters
+    const usageRecords = await PromoCodeUsage.find(usageFilter)
+      .populate("seasonId")
+      .sort({ usedAt: -1 });
 
     if (usageRecords.length === 0) {
       return res.json({
         success: false,
-        message: "Foydalanuvchilar topilmadi",
+        message: "Promo kod yozuvlari topilmadi",
       });
     }
 
-    // Get full user data
-    const users = await User.find({ telegramId: { $in: usageRecords } });
+    // Unique users based on telegramId to prevent duplicates
+    const uniqueUsersMap = new Map();
+    for (const record of usageRecords) {
+      if (!uniqueUsersMap.has(record.telegramId)) {
+        uniqueUsersMap.set(record.telegramId, record);
+      }
+    }
 
+    const uniqueUsersArray = Array.from(uniqueUsersMap.values());
+
+    if (uniqueUsersArray.length === 0) {
+      return res.json({
+        success: false,
+        message: "Noyob foydalanuvchilar topilmadi",
+      });
+    }
+
+    // Randomly select unique users (max 10, no duplicates)
     const winners = [];
-    const usersCopy = [...users];
-    const selectCount = Math.min(count, usersCopy.length);
+    const usageCopy = [...uniqueUsersArray];
+    const selectCount = Math.min(count, usageCopy.length);
 
     for (let i = 0; i < selectCount; i++) {
-      const randomIndex = Math.floor(Math.random() * usersCopy.length);
-      winners.push(usersCopy[randomIndex]);
-      usersCopy.splice(randomIndex, 1);
+      const randomIndex = Math.floor(Math.random() * usageCopy.length);
+      const selectedUsage = usageCopy[randomIndex];
+
+      // Format winner data
+      winners.push({
+        _id: selectedUsage._id,
+        name: selectedUsage.userName,
+        phone: selectedUsage.userPhone,
+        region: selectedUsage.userRegion,
+        username: selectedUsage.username,
+        telegramId: selectedUsage.telegramId,
+        promoCode: selectedUsage.promoCode,
+        usedAt: selectedUsage.usedAt,
+        seasonName: selectedUsage.seasonId?.name || "-",
+      });
+
+      // Remove selected user to prevent duplicates
+      usageCopy.splice(randomIndex, 1);
+    }
+
+    // Send notification to admin group about winners
+    if (botInstance && process.env.ADMIN_GROUP_ID) {
+      try {
+        for (let i = 0; i < winners.length; i++) {
+          const winner = winners[i];
+          const message =
+            `🎉 *G'olib \\#${i + 1} tanlandi\\!*\n\n` +
+            `👤 *Ism:* ${escapeMarkdown(winner.name)}\n` +
+            `📱 *Telefon:* ${escapeMarkdown(winner.phone)}\n` +
+            `🗺 *Viloyat:* ${escapeMarkdown(winner.region)}\n` +
+            `✈️ *Username:* ${
+              winner.username ? "@" + escapeMarkdown(winner.username) : "Yo'q"
+            }\n` +
+            `🆔 *Telegram ID:* \`${winner.telegramId}\`\n\n` +
+            `🎟 *Tanlangan Kod:* \`${escapeMarkdown(winner.promoCode)}\`\n` +
+            `🎭 *Mavsum:* ${escapeMarkdown(winner.seasonName)}\n` +
+            `📅 *Kod kiritilgan:* ${escapeMarkdown(
+              new Date(winner.usedAt).toLocaleString("uz-UZ")
+            )}\n\n` +
+            `⏰ *Tanlangan vaqt:* ${escapeMarkdown(
+              new Date().toLocaleString("uz-UZ")
+            )}`;
+
+          await botInstance.telegram.sendMessage(
+            process.env.ADMIN_GROUP_ID,
+            message,
+            { parse_mode: "MarkdownV2" }
+          );
+        }
+      } catch (error) {
+        console.error("Admin notification error:", error);
+      }
     }
 
     res.json({
       success: true,
       data: winners,
-      total: users.length,
+      total: uniqueUsersArray.length,
     });
   } catch (error) {
     console.error("Random winner error:", error);
     res.status(500).json({ success: false, message: "Server xatosi" });
   }
 });
+
+// ==================== USER BLOCK/UNBLOCK ====================
+
+// POST: Block user
+router.post("/users/:id/block", jwtAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Foydalanuvchi topilmadi",
+      });
+    }
+
+    if (user.isBlocked) {
+      return res.status(400).json({
+        success: false,
+        message: "Foydalanuvchi allaqachon bloklangan",
+      });
+    }
+
+    user.isBlocked = true;
+    user.blockedAt = new Date();
+    user.blockedReason = reason || "Adminlar tomonidan bloklangan";
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Foydalanuvchi bloklandi",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Block user error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST: Unblock user
+router.post("/users/:id/unblock", jwtAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Foydalanuvchi topilmadi",
+      });
+    }
+
+    if (!user.isBlocked) {
+      return res.status(400).json({
+        success: false,
+        message: "Foydalanuvchi bloklanmagan",
+      });
+    }
+
+    user.isBlocked = false;
+    user.blockedAt = null;
+    user.blockedReason = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Foydalanuvchi blokdan chiqarildi",
+      data: user,
+    });
+  } catch (error) {
+    console.error("Unblock user error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ==================== BROADCAST ====================
 
 // POST: Broadcast message
 router.post("/broadcast", jwtAuth, async (req, res) => {
@@ -714,3 +1069,4 @@ Vaqt: ${new Date().toLocaleString("uz-UZ")}
 });
 
 module.exports = router;
+module.exports.setBotInstance = setBotInstance;

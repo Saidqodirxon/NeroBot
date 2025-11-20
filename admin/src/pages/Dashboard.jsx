@@ -6,6 +6,8 @@ import Users from "./UsersNew";
 import Broadcast from "./Broadcast";
 import Seasons from "./Seasons";
 import RandomWinner from "./RandomWinner";
+import Prizes from "./Prizes";
+import Settings from "./Settings";
 
 export default function Dashboard() {
   const logout = () => {
@@ -76,6 +78,17 @@ export default function Dashboard() {
           👥 Foydalanuvchilar
         </Link>
         <Link
+          to="/app/prizes"
+          style={{
+            marginRight: 24,
+            padding: "8px 16px",
+            textDecoration: "none",
+            fontWeight: 500,
+          }}
+        >
+          🎁 Sovg'alar
+        </Link>
+        <Link
           to="/app/winner"
           style={{
             marginRight: 24,
@@ -89,12 +102,23 @@ export default function Dashboard() {
         <Link
           to="/app/broadcast"
           style={{
+            marginRight: 24,
             padding: "8px 16px",
             textDecoration: "none",
             fontWeight: 500,
           }}
         >
           📢 Yangilik Yuborish
+        </Link>
+        <Link
+          to="/app/settings"
+          style={{
+            padding: "8px 16px",
+            textDecoration: "none",
+            fontWeight: 500,
+          }}
+        >
+          ⚙️ Sozlamalar
         </Link>
       </nav>
 
@@ -103,8 +127,10 @@ export default function Dashboard() {
         <Route path="/seasons" element={<Seasons />} />
         <Route path="/codes" element={<PromoCodes />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/prizes" element={<Prizes />} />
         <Route path="/winner" element={<RandomWinner />} />
         <Route path="/broadcast" element={<Broadcast />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/" element={<Navigate to="/app/stats" replace />} />
       </Routes>
     </div>

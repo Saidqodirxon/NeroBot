@@ -7,6 +7,7 @@ export default function Users() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [regionFilter, setRegionFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
@@ -96,6 +97,39 @@ export default function Users() {
     }
   };
 
+  const blockUser = async (userId) => {
+    const reason = prompt("Bloklash sababini kiriting (ixtiyoriy):");
+    if (reason === null) return; // Cancel bosilsa
+
+    try {
+      await users.block(userId, reason || undefined);
+      alert("Foydalanuvchi bloklandi");
+      load(); // Ro'yxatni yangilash
+      if (showDetailsModal) {
+        setShowDetailsModal(false);
+        setSelectedUser(null);
+      }
+    } catch (err) {
+      alert("Xatolik: " + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const unblockUser = async (userId) => {
+    if (!confirm("Foydalanuvchini blokdan chiqarasizmi?")) return;
+
+    try {
+      await users.unblock(userId);
+      alert("Foydalanuvchi blokdan chiqarildi");
+      load(); // Ro'yxatni yangilash
+      if (showDetailsModal) {
+        setShowDetailsModal(false);
+        setSelectedUser(null);
+      }
+    } catch (err) {
+      alert("Xatolik: " + (err.response?.data?.message || err.message));
+    }
+  };
+
   return (
     <div>
       <h3>👥 Foydalanuvchilar</h3>
@@ -112,6 +146,14 @@ export default function Users() {
         <div
           style={{ display: "flex", gap: 12, alignItems: "center", flex: 1 }}
         >
+          <input
+            type="text"
+            className="input"
+            placeholder="🔍 Qidirish (ism, telefon, ID)..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ width: 300 }}
+          />
           <select
             className="input"
             value={regionFilter}
@@ -126,7 +168,19 @@ export default function Users() {
             ))}
           </select>
           <div>
-            <strong>Natija:</strong> {list.length} ta foydalanuvchi
+            <strong>Natija:</strong>{" "}
+            {
+              list.filter((user) => {
+                const searchLower = searchQuery.toLowerCase();
+                return (
+                  user.name?.toLowerCase().includes(searchLower) ||
+                  user.phone?.includes(searchQuery) ||
+                  user.telegramId?.toString().includes(searchQuery) ||
+                  user.username?.toLowerCase().includes(searchLower)
+                );
+              }).length
+            }{" "}
+            ta foydalanuvchi
           </div>
         </div>
         <button className="button" onClick={exportUsers}>
@@ -179,46 +233,82 @@ export default function Users() {
             </tr>
           </thead>
           <tbody>
-            {list.map((user, idx) => (
-              <tr
-                key={user._id}
-                style={{
-                  borderBottom: "1px solid #eee",
-                  background: idx % 2 === 0 ? "#fafafa" : "white",
-                }}
-              >
-                <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
-                <td style={{ padding: "10px 8px", fontWeight: 500 }}>
-                  {user.name}
-                </td>
-                <td style={{ padding: "10px 8px", fontFamily: "monospace" }}>
-                  {user.phone}
-                </td>
-                <td style={{ padding: "10px 8px" }}>{user.region}</td>
-                <td style={{ padding: "10px 8px" }}>
-                  {user.username ? `@${user.username}` : "—"}
-                </td>
-                <td style={{ padding: "10px 8px", fontFamily: "monospace" }}>
-                  {user.telegramId}
-                </td>
-                <td style={{ padding: "10px 8px", fontSize: 12 }}>
-                  {new Date(user.registeredAt).toLocaleDateString("uz-UZ")}
-                </td>
-                <td style={{ padding: "10px 8px" }}>
-                  <button
-                    className="button"
-                    onClick={() => loadUserDetails(user)}
-                    style={{
-                      padding: "4px 12px",
-                      fontSize: 12,
-                      background: "#2196F3",
-                    }}
-                  >
-                    📊 Tafsilotlar
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {list
+              .filter((user) => {
+                const searchLower = searchQuery.toLowerCase();
+                return (
+                  user.name?.toLowerCase().includes(searchLower) ||
+                  user.phone?.includes(searchQuery) ||
+                  user.telegramId?.toString().includes(searchQuery) ||
+                  user.username?.toLowerCase().includes(searchLower)
+                );
+              })
+              .map((user, idx) => (
+                <tr
+                  key={user._id}
+                  style={{
+                    borderBottom: "1px solid #eee",
+                    background: idx % 2 === 0 ? "#fafafa" : "white",
+                  }}
+                >
+                  <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
+                  <td style={{ padding: "10px 8px", fontWeight: 500 }}>
+                    {user.name}
+                  </td>
+                  <td style={{ padding: "10px 8px", fontFamily: "monospace" }}>
+                    {user.phone}
+                  </td>
+                  <td style={{ padding: "10px 8px" }}>{user.region}</td>
+                  <td style={{ padding: "10px 8px" }}>
+                    {user.username ? `@${user.username}` : "—"}
+                  </td>
+                  <td style={{ padding: "10px 8px", fontFamily: "monospace" }}>
+                    {user.telegramId}
+                  </td>
+                  <td style={{ padding: "10px 8px", fontSize: 12 }}>
+                    {new Date(user.registeredAt).toLocaleDateString("uz-UZ")}
+                  </td>
+                  <td style={{ padding: "10px 8px" }}>
+                    <button
+                      className="button"
+                      onClick={() => loadUserDetails(user)}
+                      style={{
+                        padding: "4px 12px",
+                        fontSize: 12,
+                        background: "#2196F3",
+                        marginRight: 8,
+                      }}
+                    >
+                      📊 Tafsilotlar
+                    </button>
+                    {user.isBlocked ? (
+                      <button
+                        className="button"
+                        onClick={() => unblockUser(user._id)}
+                        style={{
+                          padding: "4px 12px",
+                          fontSize: 12,
+                          background: "#4CAF50",
+                        }}
+                      >
+                        ✅ Blokdan chiqarish
+                      </button>
+                    ) : (
+                      <button
+                        className="button"
+                        onClick={() => blockUser(user._id)}
+                        style={{
+                          padding: "4px 12px",
+                          fontSize: 12,
+                          background: "#f44336",
+                        }}
+                      >
+                        🚫 Bloklash
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       )}
@@ -289,14 +379,31 @@ export default function Users() {
                 }}
               >
                 <div>
-                  <strong>📱 Telefon:</strong> {selectedUser.phone}
+                  <strong>📱 Telefon:</strong>{" "}
+                  <a
+                    href={`tel:${selectedUser.phone}`}
+                    style={{ color: "#1976d2", textDecoration: "none" }}
+                  >
+                    {selectedUser.phone}
+                  </a>
                 </div>
                 <div>
                   <strong>🗺 Viloyat:</strong> {selectedUser.region}
                 </div>
                 <div>
                   <strong>✈️ Username:</strong>{" "}
-                  {selectedUser.username ? `@${selectedUser.username}` : "Yo'q"}
+                  {selectedUser.username ? (
+                    <a
+                      href={`tg://resolve?domain=${selectedUser.username}`}
+                      style={{ color: "#1976d2", textDecoration: "none" }}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      @{selectedUser.username}
+                    </a>
+                  ) : (
+                    "Yo'q"
+                  )}
                 </div>
                 <div>
                   <strong>🆔 Telegram ID:</strong> {selectedUser.telegramId}

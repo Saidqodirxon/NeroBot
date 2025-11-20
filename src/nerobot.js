@@ -23,6 +23,10 @@ connectDB();
 // Bot yaratish
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// Bot instanceni API routesga o'tkazish (g'olib notification uchun)
+const { setBotInstance } = require("./api/routesNew");
+setBotInstance(bot);
+
 // Bot'ni export qilish (routes.js'da ishlatish uchun)
 module.exports = { bot };
 
@@ -37,27 +41,122 @@ const stage = new Scenes.Stage([
 bot.use(session());
 bot.use(stage.middleware());
 
+// Blocked user check middleware - ENG BIRINCHI tekshirish
+bot.use(async (ctx, next) => {
+  // Faqat private chatdagi oddiy userlar uchun
+  if (ctx.chat?.type === "private" && ctx.from?.id) {
+    try {
+      const User = require("./models/User");
+      const user = await User.findOne({ telegramId: ctx.from.id });
+
+      if (user && user.isBlocked) {
+        const supportUsername = process.env.SUPPORT_USERNAME || "support";
+        const blockReason =
+          user.blockedReason || "Adminlar tomonidan bloklangan";
+
+        // HTML uchun maxsus belgilarni escape qilish
+        const escapeHtml = (text) => {
+          return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        };
+
+        await ctx.reply(
+          "🚫 <b>SIZ BLOKLANGANSIZ</b>\n\n" +
+            `❌ Sabab: ${escapeHtml(blockReason)}\n\n` +
+            "Siz botdan foydalana olmaysiz.\n\n" +
+            `📞 Texnik yordam uchun: @${supportUsername}`,
+          {
+            parse_mode: "HTML",
+            reply_markup: {
+              remove_keyboard: true,
+            },
+          }
+        );
+        return; // HECH QANDAY keyingi handlerga o'tmasin
+      }
+    } catch (error) {
+      console.error("Block check error:", error);
+    }
+  }
+  return next();
+});
+
+// Private chat only middleware - guruhda ishlamaslik uchun
+bot.use(async (ctx, next) => {
+  // Faqat private chatlarni qabul qilish
+  if (ctx.chat?.type !== "private") {
+    console.log(`Group message from ${ctx.chat.id} (${ctx.chat.type})`);
+
+    // Faqat botni mention qilganda yoki commandlarda javob berish
+    const isMentioned = ctx.message?.text?.includes(
+      `@${process.env.BOT_USERNAME}`
+    );
+    const isCommand = ctx.message?.text?.startsWith("/");
+    const isReplyToBot =
+      ctx.message?.reply_to_message?.from?.id === ctx.botInfo?.id;
+
+    if (isMentioned || isCommand || isReplyToBot) {
+      // Botni chaqirganda xabar yuborish
+      try {
+        await ctx.reply(
+          "⚠️ Bot faqat shaxsiy chatda ishlaydi.\n\n" +
+            "Iltimos, botni shaxsiy chatda ishga tushiring: @" +
+            process.env.BOT_USERNAME,
+          {
+            reply_markup: {
+              remove_keyboard: true,
+            },
+          }
+        );
+      } catch (err) {
+        console.error("Group reply error:", err);
+      }
+    }
+
+    return; // Guruh xabarlarini ignore qilish
+  }
+  return next();
+});
+
 // /start buyrug'i
 bot.start(async (ctx) => {
-  const User = require("./models/User");
-  const user = await User.findOne({ telegramId: ctx.from.id });
+  try {
+    // Eski session va keyboard cache'ni tozalash
+    if (ctx.session) {
+      ctx.session = {};
+    }
 
-  if (user) {
-    // Ro'yxatdan o'tgan foydalanuvchi
-    await ctx.reply(
-      `👋 *Xush kelibsiz, ${user.name}!*\n\n` +
-        "Asosiy menyudan kerakli bo'limni tanlang:",
-      {
+    // Scene'dan chiqish (agar scene ichida bo'lsa)
+    await ctx.scene.leave().catch(() => {});
+
+    const User = require("./models/User");
+    const user = await User.findOne({ telegramId: ctx.from.id });
+
+    if (user) {
+      // Ro'yxatdan o'tgan foydalanuvchi
+      await ctx.reply(
+        `👋 *Xush kelibsiz, ${user.name}!*\n\n` +
+          "Asosiy menyudan kerakli bo'limni tanlang:",
+        {
+          parse_mode: "Markdown",
+          ...mainMenuKeyboard(),
+        }
+      );
+    } else {
+      // Yangi foydalanuvchi
+      await ctx.reply(WELCOME_MESSAGE, {
         parse_mode: "Markdown",
         ...mainMenuKeyboard(),
-      }
+      });
+    }
+  } catch (error) {
+    console.error("Start command error:", error);
+    await ctx.reply(
+      "Xush kelibsiz! Asosiy menyudan kerakli bo'limni tanlang:",
+      mainMenuKeyboard()
     );
-  } else {
-    // Yangi foydalanuvchi
-    await ctx.reply(WELCOME_MESSAGE, {
-      parse_mode: "Markdown",
-      ...mainMenuKeyboard(),
-    });
   }
 });
 
@@ -150,16 +249,34 @@ bot.hears("🎟 Barcha kodlarimni ko'rish", async (ctx) => {
 
 // "Asosiy menyu" tugmasi
 bot.hears("🔙 Asosiy menyu", async (ctx) => {
+  // Session va scene cache'ni tozalash
+  if (ctx.session) {
+    ctx.session = {};
+  }
+  await ctx.scene.leave().catch(() => {});
+
   await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
 });
 
 // "🏠 Asosiy menyu" tugmasi
 bot.hears("🏠 Asosiy menyu", async (ctx) => {
+  // Session va scene cache'ni tozalash
+  if (ctx.session) {
+    ctx.session = {};
+  }
+  await ctx.scene.leave().catch(() => {});
+
   await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
 });
 
 // "Orqaga" tugmasi
 bot.hears("🔙 Orqaga", async (ctx) => {
+  // Session va scene cache'ni tozalash
+  if (ctx.session) {
+    ctx.session = {};
+  }
+  await ctx.scene.leave().catch(() => {});
+
   await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
 });
 
@@ -168,6 +285,65 @@ bot.hears("🛠 Qo'llab-quvvatlash bilan bog'laning", async (ctx) => {
   await ctx.reply(SUPPORT_MESSAGE, {
     parse_mode: "HTML",
   });
+});
+
+// "Sovg'alar" tugmasi
+bot.hears("🎁 Sovg'alar", async (ctx) => {
+  try {
+    const Prize = require("./models/Prize");
+    const prizes = await Prize.find({ isActive: true })
+      .populate("seasonId")
+      .sort({ createdAt: -1 });
+
+    if (prizes.length === 0) {
+      return await ctx.reply(
+        "🎁 *Sovg'alar*\n\nHozircha aktiv sovg'alar yo'q.",
+        {
+          parse_mode: "Markdown",
+          ...mainMenuKeyboard(),
+        }
+      );
+    }
+
+    await ctx.reply(
+      `🎁 *Sovg'alar ro'yxati*\n\nBizning aksiyalarimizda g'olib bo'lib, quyidagi sovg'alardan birini yutib olishingiz mumkin!`,
+      {
+        parse_mode: "Markdown",
+      }
+    );
+
+    for (const prize of prizes) {
+      // Caption faqat nom va tavsif (mavsumni olib tashladik)
+      const caption =
+        `<b>${prize.name}</b>` +
+        `${prize.description ? "\n\n" + prize.description : ""}`;
+
+      try {
+        // Rasmni yuborish
+        await ctx.replyWithPhoto(prize.imageUrl, {
+          caption: caption,
+          parse_mode: "HTML",
+        });
+      } catch (err) {
+        console.error("Prize image send error:", err);
+        // Agar rasm yuklanmasa, faqat textni yuborish
+        await ctx.reply(caption + "\n\n❌ (Rasm yuklanmadi)", {
+          parse_mode: "HTML",
+        });
+      }
+    }
+
+    await ctx.reply(
+      "Ko'proq kod kiritib, g'olib bo'lish imkoniyatingizni oshiring! 🍀",
+      mainMenuKeyboard()
+    );
+  } catch (error) {
+    console.error("Prizes display error:", error);
+    await ctx.reply(
+      "❌ Xatolik yuz berdi. Iltimos, keyinroq qaytadan urinib ko'ring.",
+      mainMenuKeyboard()
+    );
+  }
 });
 
 // Broadcast buyrug'i (faqat admin uchun)
@@ -281,6 +457,9 @@ app.use(
 );
 
 app.use(express.json());
+
+// Serve uploaded files statically
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Static files uchun
 if (process.env.NODE_ENV === "production") {

@@ -31,11 +31,6 @@ export default function Seasons() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.name) {
-      alert("Mavsum nomi majburiy!");
-      return;
-    }
-
     try {
       if (editingSeason) {
         await seasons.update(editingSeason._id, formData);
@@ -99,8 +94,6 @@ export default function Seasons() {
     setFormData({
       name: "",
       description: "",
-      startDate: "",
-      endDate: "",
       isActive: true,
     });
     setShowModal(true);
@@ -232,7 +225,7 @@ export default function Seasons() {
 
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: 12 }}>
-                <label>Mavsum nomi *</label>
+                <label>Mavsum nomi</label>
                 <input
                   type="text"
                   className="input"
@@ -241,7 +234,6 @@ export default function Seasons() {
                     setFormData({ ...formData, name: e.target.value })
                   }
                   placeholder="Masalan: Yangi Yil 2025"
-                  required
                   style={{ width: "100%", marginTop: 4 }}
                 />
               </div>

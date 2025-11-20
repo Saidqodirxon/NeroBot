@@ -57,6 +57,9 @@ export const users = {
         responseType: "blob",
       }
     ),
+  block: (userId, reason) =>
+    instance.post(`/users/${userId}/block`, { reason }),
+  unblock: (userId) => instance.post(`/users/${userId}/unblock`),
 };
 
 export const promoCodes = {
