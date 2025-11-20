@@ -153,7 +153,8 @@ router.patch("/profile", authMiddleware, async (req, res) => {
       admin.password = password;
     }
 
-    await admin.save();
+    // validateModifiedOnly: true - faqat o'zgartirilgan fieldlarni validatsiya qiladi
+    await admin.save({ validateModifiedOnly: true });
 
     console.log("Profile updated successfully:", admin.username);
 
