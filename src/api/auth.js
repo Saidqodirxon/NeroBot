@@ -113,9 +113,25 @@ router.get("/profile", authMiddleware, async (req, res) => {
 router.patch("/profile", authMiddleware, async (req, res) => {
   try {
     const { username, password, telegramId } = req.body;
+
+    console.log("Profile update request:", {
+      adminId: req.admin?.id,
+      username,
+      hasPassword: !!password,
+      telegramId,
+    });
+
+    if (!req.admin || !req.admin.id) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
     const admin = await Admin.findById(req.admin.id);
 
     if (!admin) {
+      console.error("Admin not found:", req.admin.id);
       return res.status(404).json({
         success: false,
         message: "Admin topilmadi",
@@ -143,15 +159,18 @@ router.patch("/profile", authMiddleware, async (req, res) => {
 
     await admin.save();
 
+    console.log("Profile updated successfully:", admin.username);
+
     res.json({
       success: true,
       message: "Ma'lumotlar yangilandi",
     });
   } catch (error) {
-    console.error("Profile update xatolik:", error);
+    console.error("Profile update xatolik:", error.message);
+    console.error("Stack:", error.stack);
     res.status(500).json({
       success: false,
-      message: "Server xatoligi",
+      message: "Server xatoligi: " + error.message,
     });
   }
 });

@@ -88,7 +88,11 @@ export default function Settings() {
         updateData.password = formData.newPassword;
       }
 
+      console.log("Sending update request:", updateData);
+
       const response = await api.patch("/auth/profile", updateData);
+
+      console.log("Update response:", response.data);
 
       if (response.data.success) {
         setMessage({
@@ -105,9 +109,14 @@ export default function Settings() {
       }
     } catch (error) {
       console.error("Yangilashda xatolik:", error);
+      console.error("Error response:", error.response);
+      const errorMsg =
+        error.response?.data?.message ||
+        error.message ||
+        "Yangilashda xatolik yuz berdi";
       setMessage({
         type: "error",
-        text: error.response?.data?.message || "Yangilashda xatolik yuz berdi",
+        text: errorMsg,
       });
     } finally {
       setLoading(false);
