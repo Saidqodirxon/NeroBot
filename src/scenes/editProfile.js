@@ -98,7 +98,13 @@ Nimani o'zgartirmoqchisiz?
           );
         }
 
-        await User.updateOne({ telegramId: ctx.from.id }, { phone: newValue });
+        // Userni topib, yangilash va saqlash
+        const dbUser = await User.findOne({ telegramId: ctx.from.id });
+        if (dbUser) {
+          dbUser.phone = newValue;
+          await dbUser.save();
+        }
+
         await ctx.reply(
           `✅ Telefon raqamingiz "${newValue}" ga o'zgartirildi!`,
           mainMenuKeyboard()
@@ -112,7 +118,14 @@ Nimani o'zgartirmoqchisiz?
           );
         }
         newValue = ctx.message.text;
-        await User.updateOne({ telegramId: ctx.from.id }, { region: newValue });
+
+        // Userni topib, yangilash va saqlash
+        const dbUser = await User.findOne({ telegramId: ctx.from.id });
+        if (dbUser) {
+          dbUser.region = newValue;
+          await dbUser.save();
+        }
+
         await ctx.reply(
           `✅ Viloyatingiz "${newValue}" ga o'zgartirildi!`,
           mainMenuKeyboard()
