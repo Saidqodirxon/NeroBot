@@ -53,16 +53,8 @@ export default function Settings() {
       return;
     }
 
+    // Parol o'zgartirilayotgan bo'lsa validation
     if (formData.newPassword || formData.confirmPassword) {
-      if (!formData.currentPassword) {
-        setMessage({
-          type: "error",
-          text: "Yangi parol o'rnatish uchun joriy parolni kiriting",
-        });
-        setLoading(false);
-        return;
-      }
-
       if (formData.newPassword.length < 6) {
         setMessage({
           type: "error",
@@ -84,6 +76,7 @@ export default function Settings() {
         username: formData.username,
       };
 
+      // Faqat yangi parol kiritilgan bo'lsa yuborish
       if (formData.newPassword) {
         updateData.password = formData.newPassword;
       }
@@ -124,115 +117,323 @@ export default function Settings() {
   };
 
   return (
-    <div>
-      <h2>⚙️ Sozlamalar</h2>
+    <div style={{ maxWidth: 800, margin: "0 auto" }}>
+      <div
+        style={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: "32px 24px",
+          borderRadius: 12,
+          marginBottom: 32,
+          color: "white",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 28, fontWeight: 600 }}>
+          ⚙️ Sozlamalar
+        </h2>
+        <p style={{ margin: "8px 0 0 0", opacity: 0.9, fontSize: 14 }}>
+          Profilingizni boshqaring va xavfsizligingizni ta'minlang
+        </p>
+      </div>
 
       {currentAdmin && (
         <div
           style={{
-            marginBottom: 24,
-            padding: 16,
-            backgroundColor: "#f5f5f5",
-            borderRadius: 8,
+            marginBottom: 32,
+            padding: 24,
+            background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+            borderRadius: 12,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
           }}
         >
-          <p style={{ margin: 0, marginBottom: 8 }}>
-            <strong>Telegram ID:</strong> {currentAdmin.telegramId}
-          </p>
-          <p style={{ margin: 0 }}>
-            <strong>Rol:</strong>{" "}
-            {currentAdmin.role === "admin" ? "Admin" : "Moderator"}
-          </p>
+          <h3
+            style={{
+              margin: "0 0 16px 0",
+              fontSize: 18,
+              color: "#2d3748",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            👤 Profil Ma'lumotlari
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                padding: 16,
+                background: "white",
+                borderRadius: 8,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#718096",
+                  marginBottom: 4,
+                  fontWeight: 500,
+                }}
+              >
+                🆔 Telegram ID
+              </div>
+              <div
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: "#2d3748",
+                  fontFamily: "monospace",
+                }}
+              >
+                {currentAdmin.telegramId}
+              </div>
+            </div>
+            <div
+              style={{
+                padding: 16,
+                background: "white",
+                borderRadius: 8,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#718096",
+                  marginBottom: 4,
+                  fontWeight: 500,
+                }}
+              >
+                👔 Rol
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: "#2d3748" }}>
+                {currentAdmin.role === "admin" ? "🔑 Admin" : "⭐ Moderator"}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label>
-            Username <span style={{ color: "red" }}>*</span>
-          </label>
-          <input
-            type="text"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            placeholder="Username kiriting"
-            required
-          />
-        </div>
+      <div
+        style={{
+          background: "white",
+          padding: 32,
+          borderRadius: 12,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        }}
+      >
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 32 }}>
+            <h3
+              style={{
+                margin: "0 0 20px 0",
+                fontSize: 20,
+                color: "#2d3748",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              👤 Asosiy Ma'lumotlar
+            </h3>
+            <div className="form-group">
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 600,
+                  color: "#2d3748",
+                }}
+              >
+                Username <span style={{ color: "#e53e3e" }}>*</span>
+              </label>
+              <input
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                placeholder="Username kiriting"
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "2px solid #e2e8f0",
+                  fontSize: 16,
+                  transition: "all 0.2s",
+                  outline: "none",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#667eea")}
+                onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+              />
+            </div>
+          </div>
 
-        <hr
-          style={{
-            margin: "24px 0",
-            border: "none",
-            borderTop: "1px solid #e0e0e0",
-          }}
-        />
-
-        <h3 style={{ marginBottom: 16 }}>Parolni o'zgartirish</h3>
-        <p style={{ color: "#666", fontSize: 14, marginBottom: 16 }}>
-          Parolni o'zgartirmoqchi bo'lsangiz, quyidagi maydonlarni to'ldiring
-        </p>
-
-        <div className="form-group">
-          <label>Joriy parol</label>
-          <input
-            type="password"
-            name="currentPassword"
-            value={formData.currentPassword}
-            onChange={handleChange}
-            placeholder="Joriy parolingizni kiriting"
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Yangi parol</label>
-          <input
-            type="password"
-            name="newPassword"
-            value={formData.newPassword}
-            onChange={handleChange}
-            placeholder="Yangi parol kiriting (kamida 6 ta belgi)"
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Yangi parolni tasdiqlash</label>
-          <input
-            type="password"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            placeholder="Yangi parolni qayta kiriting"
-          />
-        </div>
-
-        {message.text && (
           <div
             style={{
-              padding: 12,
-              marginBottom: 16,
-              borderRadius: 4,
-              backgroundColor:
-                message.type === "success" ? "#d4edda" : "#f8d7da",
-              color: message.type === "success" ? "#155724" : "#721c24",
-              border: `1px solid ${
-                message.type === "success" ? "#c3e6cb" : "#f5c6cb"
-              }`,
+              borderTop: "2px solid #e2e8f0",
+              paddingTop: 32,
+              marginBottom: 24,
             }}
           >
-            {message.text}
-          </div>
-        )}
+            <h3
+              style={{
+                margin: "0 0 8px 0",
+                fontSize: 20,
+                color: "#2d3748",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              🔐 Parolni O'zgartirish
+            </h3>
+            <p
+              style={{
+                color: "#718096",
+                fontSize: 14,
+                marginBottom: 20,
+                lineHeight: 1.6,
+              }}
+            >
+              Xavfsizligingiz uchun parolni vaqti-vaqti bilan yangilab turing.
+              Parol kamida 6 belgidan iborat bo'lishi kerak.
+            </p>
 
-        <button
-          type="submit"
-          className="button button-primary"
-          disabled={loading}
-        >
-          {loading ? "Yuklanmoqda..." : "Saqlash"}
-        </button>
-      </form>
+            <div className="form-group" style={{ marginBottom: 20 }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 600,
+                  color: "#2d3748",
+                }}
+              >
+                🔑 Yangi Parol
+              </label>
+              <input
+                type="password"
+                name="newPassword"
+                value={formData.newPassword}
+                onChange={handleChange}
+                placeholder="Yangi parol kiriting (kamida 6 ta belgi)"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "2px solid #e2e8f0",
+                  fontSize: 16,
+                  transition: "all 0.2s",
+                  outline: "none",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#667eea")}
+                onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+              />
+            </div>
+
+            <div className="form-group">
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: 8,
+                  fontWeight: 600,
+                  color: "#2d3748",
+                }}
+              >
+                ✅ Parolni Tasdiqlash
+              </label>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                placeholder="Yangi parolni qayta kiriting"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  border: "2px solid #e2e8f0",
+                  fontSize: 16,
+                  transition: "all 0.2s",
+                  outline: "none",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#667eea")}
+                onBlur={(e) => (e.target.style.borderColor = "#e2e8f0")}
+              />
+            </div>
+          </div>
+
+          {message.text && (
+            <div
+              style={{
+                padding: 16,
+                marginBottom: 24,
+                borderRadius: 8,
+                backgroundColor:
+                  message.type === "success" ? "#c6f6d5" : "#fed7d7",
+                color: message.type === "success" ? "#22543d" : "#742a2a",
+                border: `2px solid ${
+                  message.type === "success" ? "#9ae6b4" : "#fc8181"
+                }`,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                fontSize: 14,
+                fontWeight: 500,
+              }}
+            >
+              <span style={{ fontSize: 20 }}>
+                {message.type === "success" ? "✅" : "❌"}
+              </span>
+              {message.text}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "14px 24px",
+              background: loading
+                ? "#cbd5e0"
+                : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              color: "white",
+              border: "none",
+              borderRadius: 8,
+              fontSize: 16,
+              fontWeight: 600,
+              cursor: loading ? "not-allowed" : "pointer",
+              transition: "all 0.3s",
+              boxShadow: loading
+                ? "none"
+                : "0 4px 12px rgba(102, 126, 234, 0.4)",
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow =
+                  "0 6px 20px rgba(102, 126, 234, 0.5)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow =
+                  "0 4px 12px rgba(102, 126, 234, 0.4)";
+              }
+            }}
+          >
+            {loading ? "⏳ Saqlanmoqda..." : "💾 Saqlash"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

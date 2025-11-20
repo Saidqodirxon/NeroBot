@@ -112,19 +112,18 @@ router.get("/profile", authMiddleware, async (req, res) => {
 // Update admin profile
 router.patch("/profile", authMiddleware, async (req, res) => {
   try {
-    const { username, password, telegramId } = req.body;
+    const { username, password } = req.body;
 
     console.log("Profile update request:", {
       adminId: req.admin?.id,
       username,
       hasPassword: !!password,
-      telegramId,
     });
 
     if (!req.admin || !req.admin.id) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required",
+        message: "Autentifikatsiya talab qilinadi",
       });
     }
 
@@ -138,6 +137,7 @@ router.patch("/profile", authMiddleware, async (req, res) => {
       });
     }
 
+    // Faqat username va password ni yangilash (telegramId o'zgarmas)
     if (username && username !== admin.username) {
       const exists = await Admin.findOne({ username, _id: { $ne: admin._id } });
       if (exists) {
@@ -153,17 +153,18 @@ router.patch("/profile", authMiddleware, async (req, res) => {
       admin.password = password;
     }
 
-    if (telegramId) {
-      admin.telegramId = telegramId;
-    }
-
     await admin.save();
 
     console.log("Profile updated successfully:", admin.username);
 
     res.json({
       success: true,
-      message: "Ma'lumotlar yangilandi",
+      message: "Ma'lumotlar muvaffaqiyatli yangilandi",
+      data: {
+        username: admin.username,
+        role: admin.role,
+        telegramId: admin.telegramId,
+      },
     });
   } catch (error) {
     console.error("Profile update xatolik:", error.message);
