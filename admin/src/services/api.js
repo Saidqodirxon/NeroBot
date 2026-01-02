@@ -4,7 +4,8 @@ const API_BASE = import.meta.env.VITE_API_URL || "/api/v1";
 
 const instance = axios.create({
   baseURL: API_BASE,
-  timeout: 10000,
+  // increase timeout to allow bulk uploads of many promo codes
+  timeout: 60000,
 });
 
 // Request interceptor - token qo'shish
