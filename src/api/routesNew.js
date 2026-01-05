@@ -358,14 +358,24 @@ router.post("/promo-codes", jwtAuth, async (req, res) => {
       });
     }
 
+    // Normalize and dedupe incoming codes
+    const upperCodes = codes
+      .map((c) => (typeof c === "string" ? c.trim().toUpperCase() : ""))
+      .filter(Boolean);
+
+    const uniqueCodes = [...new Set(upperCodes)];
+
+    // Fetch existing codes in a single query to avoid N queries
+    const existing = await PromoCode.find({
+      code: { $in: uniqueCodes },
+    }).select("code");
+    const existingSet = new Set(existing.map((e) => e.code));
+
     const validCodes = [];
     const errors = [];
 
-    for (const code of codes) {
-      const upperCode = code.trim().toUpperCase();
-
-      const exists = await PromoCode.findOne({ code: upperCode });
-      if (exists) {
+    for (const upperCode of uniqueCodes) {
+      if (existingSet.has(upperCode)) {
         errors.push({ code: upperCode, error: "Allaqachon mavjud" });
         continue;
       }
@@ -378,7 +388,7 @@ router.post("/promo-codes", jwtAuth, async (req, res) => {
     }
 
     if (validCodes.length > 0) {
-      await PromoCode.insertMany(validCodes);
+      await PromoCode.insertMany(validCodes, { ordered: false });
     }
 
     res.json({
