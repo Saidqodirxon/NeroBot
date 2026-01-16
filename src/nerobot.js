@@ -7,6 +7,7 @@ const connectDB = require("./config/database");
 const registrationScene = require("./scenes/registrationNew");
 const editProfileScene = require("./scenes/editProfile");
 const viewPromoCodesScene = require("./scenes/viewPromoCodes");
+const viewPrizesScene = require("./scenes/viewPrizes");
 const apiRoutes = require("./api/routesNew");
 const authRoutes = require("./api/auth");
 const { mainMenuKeyboard } = require("./keyboards/keyboards");
@@ -35,6 +36,7 @@ const stage = new Scenes.Stage([
   registrationScene,
   editProfileScene,
   viewPromoCodesScene,
+  viewPrizesScene,
 ]);
 
 // Middleware
@@ -289,67 +291,7 @@ bot.hears("🛠 Qo'llab-quvvatlash bilan bog'laning", async (ctx) => {
 
 // "Sovg'alar" tugmasi
 bot.hears("🎁 Sovg'alar", async (ctx) => {
-  try {
-    const Prize = require("./models/Prize");
-    const prizes = await Prize.find({ isActive: true })
-      .populate("seasonId")
-      .sort({ createdAt: -1 });
-
-    if (prizes.length === 0) {
-      return await ctx.reply(
-        "🎁 *Sovg'alar*\n\nHozircha aktiv sovg'alar yo'q.",
-        {
-          parse_mode: "Markdown",
-          ...mainMenuKeyboard(),
-        }
-      );
-    }
-
-    await ctx.reply(
-      `🎁 *Sovg'alar ro'yxati*\n\nBizning aksiyalarimizda g'olib bo'lib, quyidagi sovg'alardan birini yutib olishingiz mumkin!`,
-      {
-        parse_mode: "Markdown",
-      }
-    );
-
-    for (const prize of prizes) {
-      // Caption: nom, (agar mavjud bo'lsa) mavsum nomi va tavsif
-      const seasonPart =
-        prize.seasonId && prize.seasonId.name
-          ? "\n\n<b>Mavsum:</b> " + prize.seasonId.name
-          : "";
-
-      const caption =
-        `<b>${prize.name}</b>` +
-        `${seasonPart}` +
-        `${prize.description ? "\n\n" + prize.description : ""}`;
-
-      try {
-        // Rasmni yuborish
-        await ctx.replyWithPhoto(prize.imageUrl, {
-          caption: caption,
-          parse_mode: "HTML",
-        });
-      } catch (err) {
-        console.error("Prize image send error:", err);
-        // Agar rasm yuklanmasa, faqat textni yuborish
-        await ctx.reply(caption + "\n\n❌ (Rasm yuklanmadi)", {
-          parse_mode: "HTML",
-        });
-      }
-    }
-
-    await ctx.reply(
-      "Ko'proq kod kiritib, g'olib bo'lish imkoniyatingizni oshiring! 🍀",
-      mainMenuKeyboard()
-    );
-  } catch (error) {
-    console.error("Prizes display error:", error);
-    await ctx.reply(
-      "❌ Xatolik yuz berdi. Iltimos, keyinroq qaytadan urinib ko'ring.",
-      mainMenuKeyboard()
-    );
-  }
+  await ctx.scene.enter("view_prizes");
 });
 
 // Broadcast buyrug'i (faqat admin uchun)
