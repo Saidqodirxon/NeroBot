@@ -313,9 +313,15 @@ bot.hears("🎁 Sovg'alar", async (ctx) => {
     );
 
     for (const prize of prizes) {
-      // Caption faqat nom va tavsif (mavsumni olib tashladik)
+      // Caption: nom, (agar mavjud bo'lsa) mavsum nomi va tavsif
+      const seasonPart =
+        prize.seasonId && prize.seasonId.name
+          ? "\n\n<b>Mavsum:</b> " + prize.seasonId.name
+          : "";
+
       const caption =
         `<b>${prize.name}</b>` +
+        `${seasonPart}` +
         `${prize.description ? "\n\n" + prize.description : ""}`;
 
       try {
