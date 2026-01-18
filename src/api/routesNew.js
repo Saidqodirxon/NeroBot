@@ -440,15 +440,32 @@ router.get("/promo-codes", jwtAuth, async (req, res) => {
 router.delete("/promo-codes/:code", jwtAuth, async (req, res) => {
   try {
     const { code } = req.params;
-    const result = await PromoCode.deleteOne({ code: code.toUpperCase() });
+    const upperCode = code.toUpperCase();
 
-    if (result.deletedCount === 0) {
+    // Find the code first
+    const promoCode = await PromoCode.findOne({ code: upperCode });
+
+    if (!promoCode) {
       return res.status(404).json({ success: false, message: "Kod topilmadi" });
     }
 
+    // If it was used, clean up User reference
+    if (promoCode.isUsed && promoCode.usedBy) {
+      await User.updateOne(
+        { telegramId: promoCode.usedBy, usedPromoCode: upperCode },
+        { $set: { usedPromoCode: null } }
+      );
+    }
+
+    // Clean up usage history
+    await PromoCodeUsage.deleteOne({ promoCode: upperCode });
+
+    // Delete the code itself
+    await PromoCode.deleteOne({ _id: promoCode._id });
+
     res.json({
       success: true,
-      message: "Kod o'chirildi",
+      message: "Kod o'chirildi va user ma'lumotlari tozalandi",
     });
   } catch (error) {
     console.error("Delete promo code error:", error);

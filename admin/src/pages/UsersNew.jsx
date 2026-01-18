@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { users, seasons } from "../services/api";
+import { users, seasons, promoCodes } from "../services/api";
 import { REGIONS } from "../utils/regions";
 
 export default function Users() {
@@ -92,6 +92,24 @@ export default function Users() {
       a.href = downloadUrl;
       a.download = `user_${selectedUser.telegramId}_codes.xlsx`;
       a.click();
+    } catch (err) {
+      alert("Xatolik: " + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleDeleteCode = async (code) => {
+    if (
+      !window.confirm(
+        `Rostdan ham ${code} kodini o'chirmoqchimisiz?\nBu kod bazadan va user tarixidan butunlay o'chiriladi.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await promoCodes.delete(code);
+      // Refresh user details
+      loadUserDetails(selectedUser);
     } catch (err) {
       alert("Xatolik: " + (err.response?.data?.message || err.message));
     }
@@ -485,6 +503,7 @@ export default function Users() {
                       <th style={{ padding: "10px 8px" }}>Promo Kod</th>
                       <th style={{ padding: "10px 8px" }}>Mavsum</th>
                       <th style={{ padding: "10px 8px" }}>Sana</th>
+                      <th style={{ padding: "10px 8px", width: 60 }}>Does</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -511,6 +530,27 @@ export default function Users() {
                         </td>
                         <td style={{ padding: "10px 8px", fontSize: 13 }}>
                           {new Date(usage.usedAt).toLocaleString("uz-UZ")}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 8px",
+                            textAlign: "center",
+                          }}
+                        >
+                          <button
+                            className="button"
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: 12,
+                              background: "#ff5252",
+                              minWidth: "auto",
+                              marginLeft: 0,
+                            }}
+                            title="Kodini o'chirish"
+                            onClick={() => handleDeleteCode(usage.promoCode)}
+                          >
+                            🗑
+                          </button>
                         </td>
                       </tr>
                     ))}
