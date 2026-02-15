@@ -113,6 +113,7 @@ export default function Users() {
               <th>Telefon</th>
               <th>Viloyat</th>
               <th>Username</th>
+              <th>Ball</th>
               <th>Promo Kod</th>
               <th>Ro'yxatdan o'tgan</th>
             </tr>
@@ -120,7 +121,7 @@ export default function Users() {
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: 24 }}>
+                <td colSpan={7} style={{ textAlign: "center", padding: 24 }}>
                   Foydalanuvchilar topilmadi
                 </td>
               </tr>
@@ -131,6 +132,9 @@ export default function Users() {
                   <td>{u.phone}</td>
                   <td>{u.region || "-"}</td>
                   <td>{u.username || "-"}</td>
+                  <td style={{ fontWeight: "bold", color: "#2E7D32" }}>
+                    {u.totalPoints || 0}
+                  </td>
                   <td style={{ fontFamily: "monospace", fontWeight: "bold" }}>
                     {u.usedPromoCode}
                   </td>

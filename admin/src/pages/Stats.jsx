@@ -104,7 +104,7 @@ export default function Stats() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         {/* Top Users */}
         <div style={{ background: "#f5f5f5", padding: 16, borderRadius: 8 }}>
-          <h4 style={{ marginTop: 0 }}>🏆 Eng ko'p kod ishlatganlar</h4>
+          <h4 style={{ marginTop: 0 }}>🏆 Eng ko'p ball yig'ganlar</h4>
           {data.topUsers && data.topUsers.length > 0 ? (
             <table style={{ width: "100%", fontSize: 14 }}>
               <thead>
@@ -113,7 +113,7 @@ export default function Stats() {
                 >
                   <th style={{ padding: "8px 4px" }}>Ism</th>
                   <th style={{ padding: "8px 4px" }}>Viloyat</th>
-                  <th style={{ padding: "8px 4px" }}>Kodlar</th>
+                  <th style={{ padding: "8px 4px" }}>Ball</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,8 +123,8 @@ export default function Stats() {
                       {idx + 1}. {user.userName}
                     </td>
                     <td style={{ padding: "8px 4px" }}>{user.userRegion}</td>
-                    <td style={{ padding: "8px 4px", fontWeight: "bold" }}>
-                      {user.count}
+                    <td style={{ padding: "8px 4px", fontWeight: "bold", color: "green" }}>
+                      {user.totalPoints}
                     </td>
                   </tr>
                 ))}
