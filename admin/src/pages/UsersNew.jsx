@@ -245,6 +245,7 @@ export default function Users() {
               <th style={{ padding: "12px 8px" }}>Telefon</th>
               <th style={{ padding: "12px 8px" }}>Viloyat</th>
               <th style={{ padding: "12px 8px" }}>Username</th>
+              <th style={{ padding: "12px 8px" }}>Ball</th>
               <th style={{ padding: "12px 8px" }}>Telegram ID</th>
               <th style={{ padding: "12px 8px" }}>Sana</th>
               <th style={{ padding: "12px 8px" }}>Amallar</th>
@@ -279,6 +280,9 @@ export default function Users() {
                   <td style={{ padding: "10px 8px" }}>{user.region}</td>
                   <td style={{ padding: "10px 8px" }}>
                     {user.username ? `@${user.username}` : "—"}
+                  </td>
+                  <td style={{ padding: "10px 8px", fontWeight: "bold", color: "green" }}>
+                    {user.totalPoints || 0}
                   </td>
                   <td style={{ padding: "10px 8px", fontFamily: "monospace" }}>
                     {user.telegramId}
@@ -480,9 +484,10 @@ export default function Users() {
             ) : (
               <div>
                 <div
-                  style={{ marginBottom: 12, fontWeight: 500, fontSize: 16 }}
+                  style={{ marginBottom: 12, fontWeight: 500, fontSize: 16, display: 'flex', gap: '20px' }}
                 >
-                  📊 Jami: {userDetails.totalCodes} ta kod
+                  <span>📊 Jami kodlar: {userDetails.totalCodes} ta</span>
+                  <span style={{ color: 'green' }}>💎 Jami Ball: {userDetails.user?.totalPoints || 0}</span>
                 </div>
                 <table
                   style={{
@@ -501,9 +506,10 @@ export default function Users() {
                     >
                       <th style={{ padding: "10px 8px" }}>#</th>
                       <th style={{ padding: "10px 8px" }}>Promo Kod</th>
+                      <th style={{ padding: "10px 8px" }}>Ball</th>
                       <th style={{ padding: "10px 8px" }}>Mavsum</th>
                       <th style={{ padding: "10px 8px" }}>Sana</th>
-                      <th style={{ padding: "10px 8px", width: 60 }}>Does</th>
+                      <th style={{ padding: "10px 8px", width: 60 }}>O'chirish</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -524,6 +530,9 @@ export default function Users() {
                           }}
                         >
                           {usage.promoCode}
+                        </td>
+                        <td style={{ padding: "10px 8px", fontWeight: "bold", color: "green" }}>
+                          {usage.points || 0}
                         </td>
                         <td style={{ padding: "10px 8px" }}>
                           {usage.seasonId?.name || "—"}
