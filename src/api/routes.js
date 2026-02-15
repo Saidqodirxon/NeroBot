@@ -9,7 +9,7 @@ const XLSX = require("xlsx");
 // POST: Yangi promo kod(lar) qo'shish
 router.post("/promo-codes", jwtAuth, async (req, res) => {
   try {
-    const { codes, description } = req.body;
+    const { codes, description, points } = req.body;
 
     if (!codes || !Array.isArray(codes) || codes.length === 0) {
       return res.status(400).json({
@@ -33,6 +33,7 @@ router.post("/promo-codes", jwtAuth, async (req, res) => {
       validCodes.push({
         code: upperCode,
         description: description || "",
+        points: parseInt(points) || 0,
       });
     }
 
@@ -55,11 +56,21 @@ router.post("/promo-codes", jwtAuth, async (req, res) => {
 // GET: Barcha promo kodlarni olish
 router.get("/promo-codes", jwtAuth, async (req, res) => {
   try {
-    const { used, limit = 100, skip = 0 } = req.query;
+    const { used, limit = 100, skip = 0, search } = req.query;
 
     const filter = {};
     if (used !== undefined) {
       filter.isUsed = used === "true";
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(search.trim(), "i");
+      filter.$or = [
+        { code: searchRegex },
+        { description: searchRegex },
+        { usedByName: searchRegex },
+        { usedByPhone: searchRegex },
+      ];
     }
 
     const codes = await PromoCode.find(filter)
@@ -85,18 +96,169 @@ router.get("/promo-codes", jwtAuth, async (req, res) => {
 router.delete("/promo-codes/:code", jwtAuth, async (req, res) => {
   try {
     const { code } = req.params;
-    const result = await PromoCode.deleteOne({ code: code.toUpperCase() });
+    const upperCode = code.toUpperCase();
 
-    if (result.deletedCount === 0) {
+    // Find the code first
+    const promoCode = await PromoCode.findOne({ code: upperCode });
+
+    if (!promoCode) {
       return res.status(404).json({ success: false, message: "Kod topilmadi" });
+    }
+
+    // If code was used, deduct points and remove usage record
+    if (promoCode.isUsed && promoCode.usedBy) {
+      const User = require("../models/User");
+      const PromoCodeUsage = require("../models/PromoCodeUsage");
+
+      // 1. Deduct points from user
+      const user = await User.findOne({ telegramId: promoCode.usedBy });
+      if (user) {
+        const points = promoCode.points || 0;
+        user.totalPoints = Math.max(0, (user.totalPoints || 0) - points);
+        if (user.usedPromoCode === upperCode) {
+          user.usedPromoCode = null; // Clear if it was the last used
+        }
+        await user.save();
+      }
+
+      // 2. Delete usage record
+      await PromoCodeUsage.deleteOne({
+        promoCode: upperCode,
+        telegramId: promoCode.usedBy,
+      });
+    }
+
+    // Delete the promo code
+    await PromoCode.deleteOne({ code: upperCode });
+
+    res.json({
+      success: true,
+      message: "Kod o'chirildi va ballar qaytarildi",
+    });
+  } catch (error) {
+    console.error("Promo kod o'chirishda xatolik:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// PUT: Bulk update promo codes
+router.put("/promo-codes/bulk", jwtAuth, async (req, res) => {
+  try {
+    const { filter: clientFilter, points } = req.body;
+
+    // Reconstruct filter from client params
+    const filter = {};
+    if (clientFilter.used !== undefined && clientFilter.used !== "all") {
+      filter.isUsed = clientFilter.used === "used";
+    }
+    if (clientFilter.seasonId && clientFilter.seasonId !== "all") {
+      filter.seasonId = clientFilter.seasonId;
+    }
+    if (clientFilter.search) {
+      const searchRegex = new RegExp(clientFilter.search.trim(), "i");
+      filter.$or = [
+        { code: searchRegex },
+        { description: searchRegex },
+        { usedByName: searchRegex },
+        { usedByPhone: searchRegex },
+      ];
+    }
+
+    const newPoints = parseInt(points);
+    if (isNaN(newPoints)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Ball noto'g'ri kiritildi" });
+    }
+
+    const codesToUpdate = await PromoCode.find(filter);
+
+    let updatedCount = 0;
+    const User = require("../models/User");
+    const PromoCodeUsage = require("../models/PromoCodeUsage");
+
+    for (const code of codesToUpdate) {
+      const oldPoints = code.points || 0;
+
+      if (oldPoints !== newPoints) {
+        code.points = newPoints;
+        await code.save();
+
+        if (code.isUsed && code.usedBy) {
+          const diff = newPoints - oldPoints;
+          await User.updateOne(
+            { telegramId: code.usedBy },
+            { $inc: { totalPoints: diff } }
+          );
+          await PromoCodeUsage.updateOne(
+            { promoCode: code.code, telegramId: code.usedBy },
+            { $set: { points: newPoints } }
+          );
+        }
+        updatedCount++;
+      }
     }
 
     res.json({
       success: true,
-      message: "Kod o'chirildi",
+      message: `${updatedCount} ta kod yangilandi`,
+      totalFound: codesToUpdate.length,
     });
   } catch (error) {
-    console.error("Promo kod o'chirishda xatolik:", error);
+    console.error("Bulk update error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// PUT: Promo kodni tahrirlash
+router.put("/promo-codes/:code", jwtAuth, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { description, points } = req.body;
+    const upperCode = code.toUpperCase();
+
+    const promoCode = await PromoCode.findOne({ code: upperCode });
+
+    if (!promoCode) {
+      return res.status(404).json({ success: false, message: "Kod topilmadi" });
+    }
+
+    const oldPoints = promoCode.points || 0;
+    const newPoints = parseInt(points) || 0;
+
+    // Update fields
+    if (description !== undefined) promoCode.description = description;
+    if (points !== undefined) promoCode.points = newPoints;
+
+    await promoCode.save();
+
+    // If points changed and code is used, update user points
+    if (promoCode.isUsed && promoCode.usedBy && oldPoints !== newPoints) {
+      const User = require("../models/User");
+      const PromoCodeUsage = require("../models/PromoCodeUsage");
+
+      const diff = newPoints - oldPoints;
+
+      // Update User
+      await User.updateOne(
+        { telegramId: promoCode.usedBy },
+        { $inc: { totalPoints: diff } }
+      );
+
+      // Update Usage record
+      await PromoCodeUsage.updateOne(
+        { promoCode: upperCode, telegramId: promoCode.usedBy },
+        { $set: { points: newPoints } }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Kod yangilandi",
+      data: promoCode,
+    });
+  } catch (error) {
+    console.error("Promo kod tahrirlashda xatolik:", error);
     res.status(500).json({ success: false, message: "Server xatosi" });
   }
 });

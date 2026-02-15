@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    totalPoints: {
+      type: Number,
+      default: 0,
+    },
     isBlocked: {
       type: Boolean,
       default: false,

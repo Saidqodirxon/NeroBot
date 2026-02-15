@@ -215,7 +215,7 @@ const registrationScene = new Scenes.WizardScene(
         );
       }
 
-      const code = ctx.message.text.trim().toUpperCase();
+      const code = ctx.message.text.replace(/\s+/g, "").toUpperCase();
       console.log("🔍 Code entered:", code);
 
       // Get user (either from wizard state or database)
@@ -279,7 +279,13 @@ const registrationScene = new Scenes.WizardScene(
             { parse_mode: "MarkdownV2" }
           );
         } catch (err) {
-          console.error("Admin notification error:", err);
+          if (err.response?.description?.includes("chat not found")) {
+            console.warn(
+              `⚠️ Admin guruhi topilmadi (${process.env.ADMIN_GROUP_ID}). Bot guruhga qo'shilmagan bo'lishi mumkin.`
+            );
+          } else {
+            console.error("Admin notification error:", err.message || err);
+          }
         }
 
         return await ctx.scene.leave();
@@ -311,7 +317,13 @@ const registrationScene = new Scenes.WizardScene(
             { parse_mode: "MarkdownV2" }
           );
         } catch (err) {
-          console.error("Admin notification error:", err);
+          if (err.response?.description?.includes("chat not found")) {
+            console.warn(
+              `⚠️ Admin guruhi topilmadi (${process.env.ADMIN_GROUP_ID}). Bot guruhga qo'shilmagan bo'lishi mumkin.`
+            );
+          } else {
+            console.error("Admin notification error:", err.message || err);
+          }
         }
 
         return await ctx.scene.leave();
@@ -341,7 +353,13 @@ const registrationScene = new Scenes.WizardScene(
             { parse_mode: "MarkdownV2" }
           );
         } catch (err) {
-          console.error("Admin notification error:", err);
+          if (err.response?.description?.includes("chat not found")) {
+            console.warn(
+              `⚠️ Admin guruhi topilmadi (${process.env.ADMIN_GROUP_ID}). Bot guruhga qo'shilmagan bo'lishi mumkin.`
+            );
+          } else {
+            console.error("Admin notification error:", err.message || err);
+          }
         }
 
         return await ctx.scene.leave();
@@ -391,7 +409,13 @@ const registrationScene = new Scenes.WizardScene(
             { parse_mode: "MarkdownV2" }
           );
         } catch (error) {
-          console.error("Admin notification error:", error);
+          if (error.response?.description?.includes("chat not found")) {
+            console.warn(
+              `⚠️ Admin guruhi topilmadi (${process.env.ADMIN_GROUP_ID}). Bot guruhga qo'shilmagan bo'lishi mumkin.`
+            );
+          } else {
+            console.error("Admin notification error:", error.message || error);
+          }
         }
 
         return await ctx.scene.leave();
@@ -405,6 +429,10 @@ const registrationScene = new Scenes.WizardScene(
       promoCode.usedAt = new Date();
       await promoCode.save();
 
+      // Points calculation
+      const points = promoCode.points || 0;
+      user.totalPoints = (user.totalPoints || 0) + points;
+
       // Create usage record
       await PromoCodeUsage.create({
         telegramId: ctx.from.id,
@@ -414,9 +442,10 @@ const registrationScene = new Scenes.WizardScene(
         userRegion: user.region,
         username: ctx.from.username,
         promoCode: code,
+        points: points,
       });
 
-      // Update user's last used code
+      // Update user's last used code and points
       user.usedPromoCode = code;
       await user.save();
 
@@ -426,9 +455,12 @@ const registrationScene = new Scenes.WizardScene(
       });
 
       // Send success message to user
-      await ctx.reply(CODE_VERIFIED(user.name, code, user.phone), {
-        parse_mode: "Markdown",
-      });
+      await ctx.reply(
+        CODE_VERIFIED(user.name, code, user.phone, points, user.totalPoints),
+        {
+          parse_mode: "Markdown",
+        }
+      );
 
       await ctx.reply(
         `📊 *Jami ishlatilgan kodlar:* ${usageCount} ta\n\n` +
@@ -460,12 +492,19 @@ const registrationScene = new Scenes.WizardScene(
             "🎟 *Promo kod:* `" +
             escapeMarkdown(code) +
             "`\n" +
-            `📊 *Bu userning ${usageCount}\\-kod*\n` +
+            `💎 *Berilgan ball:* ${points}\n` +
+            `💰 *Jami ball:* ${user.totalPoints}\n` +
             `⏰ *Vaqt:* ${escapeMarkdown(new Date().toLocaleString("uz-UZ"))}`,
           { parse_mode: "MarkdownV2" }
         );
       } catch (error) {
-        console.error("Admin notification error:", error);
+        if (error.response?.description?.includes("chat not found")) {
+          console.warn(
+            `⚠️ Admin guruhi topilmadi (${process.env.ADMIN_GROUP_ID}). Bot guruhga qo'shilmagan bo'lishi mumkin.`
+          );
+        } else {
+          console.error("Admin notification error:", error.message || error);
+        }
       }
 
       return await ctx.scene.leave();

@@ -34,6 +34,10 @@ const promoCodeUsageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    points: {
+      type: Number,
+      default: 0,
+    },
     usedAt: {
       type: Date,
       default: Date.now,

@@ -42,10 +42,15 @@ Agar sizda savollar yoki muammolar bo'lsa, qo'llab-quvvatlash xizmatiga murojaat
 Tez orada sizga javob beramiz!
 `;
 
-const CODE_VERIFIED = (name, code, phone) => `
+const CODE_VERIFIED = (name, code, phone, points, totalPoints) => `
 🎉 *Rahmat, ${name}!*
 
-Promo-kodingiz \`${code}\` sizning ${phone} raqamingizga ro'yxatdan o'tkazildi. Siz o'yinda ishtirok etmoqdasiz. Omad tilaymiz! ✨
+Promo-kodingiz \`${code}\` sizning ${phone} raqamingizga ro'yxatdan o'tkazildi.
+
+💎 Sizga *${points} ball* berildi!
+📊 Umumiy ballingiz: *${totalPoints}*
+
+Siz o'yinda ishtirok etmoqdasiz. Omad tilaymiz! ✨
 `;
 
 const CODE_NOT_FOUND = (code) => `

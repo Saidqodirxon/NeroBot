@@ -12,6 +12,23 @@ viewPromoCodesScene.enter(async (ctx) => {
       .populate("seasonId")
       .sort({ usedAt: -1 }); // Most recent first
 
+    const User = require("../models/User");
+    const user = await User.findOne({ telegramId: ctx.from.id });
+
+    // Recalculate total points from usage history to ensure accuracy
+    const pointsAggregation = await PromoCodeUsage.aggregate([
+      { $match: { telegramId: ctx.from.id } },
+      { $group: { _id: null, total: { $sum: "$points" } } },
+    ]);
+    const realTotalPoints =
+      pointsAggregation.length > 0 ? pointsAggregation[0].total : 0;
+
+    // Sync User model if different
+    if (user.totalPoints !== realTotalPoints) {
+      user.totalPoints = realTotalPoints;
+      await user.save();
+    }
+
     if (!usedCodes || usedCodes.length === 0) {
       await ctx.reply(
         "❌ *Siz hali birorta promo kod ishlatmagansiz!*\n\n" +
@@ -30,7 +47,9 @@ viewPromoCodesScene.enter(async (ctx) => {
     const hasMore = usedCodes.length > maxCodesToShow;
 
     let message = `🎟 *Ishlatilgan Kodlaringiz*\n\n`;
-    message += `📊 *Jami:* ${usedCodes.length} ta\n`;
+    message += `💰 *Jami Ball:* ${realTotalPoints}\n`; // Use calculated points
+    message += `📊 *Jami Kodlar:* ${usedCodes.length} ta\n`;
+
     if (hasMore) {
       message += `👁 *Ko'rsatilgan:* ${maxCodesToShow} ta\n`;
     }
@@ -47,7 +66,7 @@ viewPromoCodesScene.enter(async (ctx) => {
         minute: "2-digit",
       });
 
-      message += `${index + 1}\\. 🎟 \`${fullCode}\` • ${dateTime}\n`;
+      message += `${index + 1}\\. 🎟 \`${fullCode}\` • 💎 *${usage.points || 0} ball*\n`;
     });
 
     if (hasMore) {
@@ -84,9 +103,23 @@ viewPromoCodesScene.hears("🔙 Profilga qaytish", async (ctx) => {
     return await ctx.reply("❌ Profil topilmadi!", mainMenuKeyboard());
   }
 
+  // Recalculate code count and points
   const codeCount = await PromoCodeUsage.countDocuments({
     telegramId: ctx.from.id,
   });
+
+  const pointsAggregation = await PromoCodeUsage.aggregate([
+    { $match: { telegramId: ctx.from.id } },
+    { $group: { _id: null, total: { $sum: "$points" } } },
+  ]);
+  const realTotalPoints =
+    pointsAggregation.length > 0 ? pointsAggregation[0].total : 0;
+
+  // Sync if needed
+  if (user.totalPoints !== realTotalPoints) {
+    user.totalPoints = realTotalPoints;
+    await user.save();
+  }
 
   const registeredDate = new Date(user.registeredAt).toLocaleDateString(
     "uz-UZ",
@@ -101,7 +134,9 @@ viewPromoCodesScene.hears("🔙 Profilga qaytish", async (ctx) => {
 🗺 <b>Viloyat:</b> ${user.region}
 ${user.username ? `✈️ <b>Username:</b> @${user.username}` : ""}
 🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>
-📊 <b>Jami kodlar:</b> ${codeCount} ta
+
+💰 <b>Jami Ballar:</b> ${realTotalPoints}
+📊 <b>Jami Kodlar:</b> ${codeCount} ta
 📅 <b>Ro'yxatdan o'tgan:</b> ${registeredDate}
   `;
 

@@ -19,6 +19,10 @@ const promoCodeSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    points: {
+      type: Number,
+      default: 0,
+    },
     isUsed: {
       type: Boolean,
       default: false,

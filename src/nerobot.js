@@ -201,6 +201,20 @@ bot.hears("👤 Profilim", async (ctx) => {
       telegramId: ctx.from.id,
     });
 
+    // Recalculate total points from usage history to ensure accuracy
+    const pointsAggregation = await PromoCodeUsage.aggregate([
+      { $match: { telegramId: ctx.from.id } },
+      { $group: { _id: null, total: { $sum: "$points" } } },
+    ]);
+    const realTotalPoints =
+      pointsAggregation.length > 0 ? pointsAggregation[0].total : 0;
+
+    // Sync User model if different
+    if (user.totalPoints !== realTotalPoints) {
+      user.totalPoints = realTotalPoints;
+      await user.save();
+    }
+
     const registeredDate = new Date(user.registeredAt).toLocaleDateString(
       "uz-UZ",
       { year: "numeric", month: "long", day: "numeric" }
@@ -214,7 +228,9 @@ bot.hears("👤 Profilim", async (ctx) => {
 🗺 <b>Viloyat:</b> ${user.region}
 ${user.username ? `✈️ <b>Username:</b> @${user.username}` : ""}
 🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>
-📊 <b>Jami kodlar:</b> ${codeCount} ta
+
+💰 <b>Jami Ballar:</b> ${realTotalPoints}
+📊 <b>Jami Kodlar:</b> ${codeCount} ta
 📅 <b>Ro'yxatdan o'tgan:</b> ${registeredDate}
   `;
 
@@ -438,9 +454,35 @@ app.listen(PORT, () => {
   console.log(`🚀 API server ishga tushdi: http://localhost:${PORT}`);
 });
 
-// Botni ishga tushirish
-bot.launch().then(() => {
-  console.log("✅ Bot muvaffaqiyatli ishga tushdi");
+// Botni ishga tushirish (Retry logic bilan)
+const launchBot = async (retries = 5, delay = 5000) => {
+  try {
+    await bot.launch();
+    console.log("✅ Bot muvaffaqiyatli ishga tushdi");
+  } catch (error) {
+    console.error("❌ Botni ishga tushirishda xatolik:", error.message);
+    if (retries > 0) {
+      console.log(
+        `🔄 Qayta urinib ko'rilmoqda... (${retries} ta urinish qoldi)`
+      );
+      setTimeout(() => launchBot(retries - 1, delay), delay);
+    } else {
+      console.error("❌ Botni ishga tushirib bo'lmadi. Internetni tekshiring.");
+    }
+  }
+};
+
+launchBot();
+
+// Global xatoliklarni ushlash (Process crash oldini olish uchun)
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // Processni o'ldirmaymiz, faqat log qilamiz
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  // Processni o'ldirmaymiz, faqat log qilamiz
 });
 
 // Graceful shutdown

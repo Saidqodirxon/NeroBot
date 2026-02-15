@@ -333,7 +333,7 @@ router.get("/public/prizes", async (req, res) => {
 // POST: Add promo code(s) with season
 router.post("/promo-codes", jwtAuth, async (req, res) => {
   try {
-    const { codes, description, seasonId } = req.body;
+    const { codes, description, seasonId, points } = req.body;
 
     if (!codes || !Array.isArray(codes) || codes.length === 0) {
       return res.status(400).json({
@@ -373,6 +373,7 @@ router.post("/promo-codes", jwtAuth, async (req, res) => {
 
     const validCodes = [];
     const errors = [];
+    const pointsValue = parseInt(points) || 0;
 
     for (const upperCode of uniqueCodes) {
       if (existingSet.has(upperCode)) {
@@ -384,6 +385,7 @@ router.post("/promo-codes", jwtAuth, async (req, res) => {
         code: upperCode,
         seasonId: seasonId,
         description: description || "",
+        points: pointsValue,
       });
     }
 
@@ -404,9 +406,10 @@ router.post("/promo-codes", jwtAuth, async (req, res) => {
 });
 
 // GET: Get promo codes with filters
+// GET: Get promo codes with filters
 router.get("/promo-codes", jwtAuth, async (req, res) => {
   try {
-    const { used, seasonId, limit = 100, skip = 0 } = req.query;
+    const { used, seasonId, limit = 100, skip = 0, search } = req.query;
 
     const filter = {};
     if (used !== undefined) {
@@ -414,6 +417,16 @@ router.get("/promo-codes", jwtAuth, async (req, res) => {
     }
     if (seasonId && seasonId !== "all") {
       filter.seasonId = seasonId;
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(search.trim(), "i");
+      filter.$or = [
+        { code: searchRegex },
+        { description: searchRegex },
+        { usedByName: searchRegex },
+        { usedByPhone: searchRegex },
+      ];
     }
 
     const codes = await PromoCode.find(filter)
@@ -436,6 +449,202 @@ router.get("/promo-codes", jwtAuth, async (req, res) => {
   }
 });
 
+// PUT: Bulk update promo codes
+router.put("/promo-codes/bulk", jwtAuth, async (req, res) => {
+  try {
+    // Increase timeout for this specific request if possible (Node.js default is usually fine, but server config matters)
+    req.setTimeout(300000); // 5 minutes
+
+    const { filter: clientFilter, points } = req.body;
+
+    // Reconstruct filter from client params
+    const baseFilter = {};
+    if (clientFilter.seasonId && clientFilter.seasonId !== "all") {
+      baseFilter.seasonId = clientFilter.seasonId;
+    }
+    if (clientFilter.search) {
+      const searchRegex = new RegExp(clientFilter.search.trim(), "i");
+      baseFilter.$or = [
+        { code: searchRegex },
+        { description: searchRegex },
+        { usedByName: searchRegex },
+        { usedByPhone: searchRegex },
+      ];
+    }
+    // "used" filter is handled below specifically
+
+    const newPoints = parseInt(points);
+    if (isNaN(newPoints)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Ball noto'g'ri kiritildi" });
+    }
+
+    let totalUpdated = 0;
+
+    // STRATEGY:
+    // 1. Update UNUSED codes directly in DB (Fastest)
+    // 2. Update USED codes via iteration to handle User point adjustments (Slower but necessary)
+
+    // --- Part 1: Unused Codes ---
+    // If client requested "all" or "unused"
+    if (
+      clientFilter.used === undefined ||
+      clientFilter.used === "all" ||
+      clientFilter.used === "unused"
+    ) {
+      const unusedFilter = { ...baseFilter, isUsed: false };
+      // Ensure we don't update if points are same (optional optimization check, but updateMany is fast enough)
+      // We'll just update all matching unused.
+      const unusedResult = await PromoCode.updateMany(unusedFilter, {
+        $set: { points: newPoints },
+      });
+      totalUpdated += unusedResult.modifiedCount;
+    }
+
+    // --- Part 2: Used Codes ---
+    // If client requested "all" or "used"
+    if (
+      clientFilter.used === undefined ||
+      clientFilter.used === "all" ||
+      clientFilter.used === "used"
+    ) {
+      const usedFilter = { ...baseFilter, isUsed: true };
+
+      // We only need to process if points are DIFFERENT.
+      // So we find used codes where points != newPoints
+      const usedCodes = await PromoCode.find({
+        ...usedFilter,
+        points: { $ne: newPoints },
+      })
+        .select("code points usedBy isUsed")
+        .lean(); // lean for performance
+
+      if (usedCodes.length > 0) {
+        const User = require("../models/User");
+        const PromoCodeUsage = require("../models/PromoCodeUsage");
+
+        const promoOps = [];
+        const userOps = [];
+        const usageOps = [];
+        const userMap = new Map(); // telegramId -> diff
+
+        for (const code of usedCodes) {
+          const oldPoints = code.points || 0;
+          const diff = newPoints - oldPoints;
+
+          // 1. PromoCode update op
+          promoOps.push({
+            updateOne: {
+              filter: { _id: code._id },
+              update: { $set: { points: newPoints } },
+            },
+          });
+
+          // 2. Accumulate User diff
+          if (code.usedBy) {
+            userMap.set(code.usedBy, (userMap.get(code.usedBy) || 0) + diff);
+          }
+
+          // 3. Usage update op
+          usageOps.push({
+            updateMany: {
+              filter: { promoCode: code.code },
+              update: { $set: { points: newPoints } },
+            },
+          });
+        }
+
+        // Convert userMap to bulk ops
+        for (const [telegramId, diff] of userMap.entries()) {
+          userOps.push({
+            updateOne: {
+              filter: { telegramId: telegramId },
+              update: { $inc: { totalPoints: diff } },
+            },
+          });
+        }
+
+        // EXECUTE BATCHES
+        const BATCH_SIZE = 1000;
+
+        // Helper to execute in batches
+        const runBatches = async (model, ops) => {
+          for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+            await model.bulkWrite(ops.slice(i, i + BATCH_SIZE));
+          }
+        };
+
+        await Promise.all([
+          runBatches(PromoCode, promoOps),
+          runBatches(User, userOps),
+          runBatches(PromoCodeUsage, usageOps),
+        ]);
+
+        totalUpdated += usedCodes.length;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${totalUpdated} ta kod muvaffaqiyatli yangilandi`,
+    });
+  } catch (error) {
+    console.error("Bulk update error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// PUT: Single update promo code
+router.put("/promo-codes/:code", jwtAuth, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { description, points } = req.body;
+    const upperCode = code.toUpperCase();
+
+    const promoCode = await PromoCode.findOne({ code: upperCode });
+
+    if (!promoCode) {
+      return res.status(404).json({ success: false, message: "Kod topilmadi" });
+    }
+
+    const oldPoints = promoCode.points || 0;
+    const newPoints = parseInt(points) || 0;
+
+    // Update fields
+    if (description !== undefined) promoCode.description = description;
+    if (points !== undefined) promoCode.points = newPoints;
+
+    await promoCode.save();
+
+    // If points changed and code is used, update user points
+    if (promoCode.isUsed && promoCode.usedBy && oldPoints !== newPoints) {
+      const diff = newPoints - oldPoints;
+
+      // Update User
+      await User.updateOne(
+        { telegramId: promoCode.usedBy },
+        { $inc: { totalPoints: diff } }
+      );
+
+      // Update Usage record
+      await PromoCodeUsage.updateOne(
+        { promoCode: upperCode, telegramId: promoCode.usedBy },
+        { $set: { points: newPoints } }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Kod yangilandi",
+      data: promoCode,
+    });
+  } catch (error) {
+    console.error("Update promo code error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
 // DELETE: Delete promo code
 router.delete("/promo-codes/:code", jwtAuth, async (req, res) => {
   try {
@@ -449,23 +658,31 @@ router.delete("/promo-codes/:code", jwtAuth, async (req, res) => {
       return res.status(404).json({ success: false, message: "Kod topilmadi" });
     }
 
-    // If it was used, clean up User reference
+    // If it was used, deduct points and clean up User reference
     if (promoCode.isUsed && promoCode.usedBy) {
-      await User.updateOne(
-        { telegramId: promoCode.usedBy, usedPromoCode: upperCode },
-        { $set: { usedPromoCode: null } }
-      );
-    }
+      const user = await User.findOne({ telegramId: promoCode.usedBy });
+      if (user) {
+        const points = promoCode.points || 0;
+        user.totalPoints = Math.max(0, (user.totalPoints || 0) - points);
+        if (user.usedPromoCode === upperCode) {
+          user.usedPromoCode = null;
+        }
+        await user.save();
+      }
 
-    // Clean up usage history
-    await PromoCodeUsage.deleteOne({ promoCode: upperCode });
+      // Cleanup usage history
+      await PromoCodeUsage.deleteOne({
+        promoCode: upperCode,
+        telegramId: promoCode.usedBy, // Ensure matching user
+      });
+    }
 
     // Delete the code itself
     await PromoCode.deleteOne({ _id: promoCode._id });
 
     res.json({
       success: true,
-      message: "Kod o'chirildi va user ma'lumotlari tozalandi",
+      message: "Kod o'chirildi va ballar qaytarildi",
     });
   } catch (error) {
     console.error("Delete promo code error:", error);
@@ -486,7 +703,7 @@ router.get("/users", jwtAuth, async (req, res) => {
     }
 
     const users = await User.find(filter)
-      .sort({ registeredAt: -1 })
+      .sort({ totalPoints: -1, registeredAt: -1 }) // Sort by points first
       .limit(parseInt(limit))
       .skip(parseInt(skip));
 
@@ -574,7 +791,7 @@ router.get("/stats", jwtAuth, async (req, res) => {
       { $sort: { count: -1 } },
     ]);
 
-    // Top users by code usage (season filtered)
+    // Top users by POINTS (season filtered)
     const topUsers = await PromoCodeUsage.aggregate([
       ...(seasonId && seasonId !== "all"
         ? [
@@ -590,14 +807,15 @@ router.get("/stats", jwtAuth, async (req, res) => {
         : []),
       {
         $group: {
-          _id: "$telegramId",
-          count: { $sum: 1 },
+          _id: "$telegramId", // Group by user
+          totalPoints: { $sum: "$points" }, // Sum points instead of counting codes
+          codeCount: { $sum: 1 }, // Keep count info too
           userName: { $first: "$userName" },
           userPhone: { $first: "$userPhone" },
           userRegion: { $first: "$userRegion" },
         },
       },
-      { $sort: { count: -1 } },
+      { $sort: { totalPoints: -1 } }, // Sort by points
       { $limit: 10 },
     ]);
 

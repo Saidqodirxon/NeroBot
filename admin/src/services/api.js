@@ -66,6 +66,8 @@ export const users = {
 export const promoCodes = {
   getAll: (params) => instance.get("/promo-codes", { params }),
   create: (data) => instance.post("/promo-codes", data),
+  update: (code, data) => instance.put(`/promo-codes/${code}`, data), // This updates single
+  bulkUpdate: (data) => instance.put("/promo-codes/bulk", data),
   delete: (code) => instance.delete(`/promo-codes/${code}`),
 };
 
