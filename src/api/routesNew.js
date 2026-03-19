@@ -699,7 +699,11 @@ router.get("/users", jwtAuth, async (req, res) => {
 
     const filter = {};
     if (region && region !== "all") {
-      filter.region = region;
+      if (region === "Toshkent") {
+        filter.region = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+      } else {
+        filter.region = region;
+      }
     }
 
     const users = await User.find(filter)
@@ -786,10 +790,33 @@ router.get("/stats", jwtAuth, async (req, res) => {
     const totalUsers = await User.countDocuments();
 
     // Users by region
-    const usersByRegion = await User.aggregate([
+    const regionGroupFilter = {};
+    if (seasonId && seasonId !== "all") {
+      // If we had season specific user filtering by region, we would add it here
+      // But currently User model doesn't have seasonId
+    }
+
+    const usersByRegionRaw = await User.aggregate([
       { $group: { _id: "$region", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
+
+    // Merge Toshkent shahri and Toshkent viloyati in stats
+    const usersByRegionMap = new Map();
+    usersByRegionRaw.forEach((item) => {
+      let regionName = item._id || "Noma'lum";
+      if (regionName === "Toshkent shahri" || regionName === "Toshkent viloyati") {
+        regionName = "Toshkent";
+      }
+      usersByRegionMap.set(
+        regionName,
+        (usersByRegionMap.get(regionName) || 0) + item.count
+      );
+    });
+
+    const usersByRegion = Array.from(usersByRegionMap.entries())
+      .map(([_id, count]) => ({ _id, count }))
+      .sort((a, b) => b.count - a.count);
 
     // Top users by POINTS (season filtered)
     const topUsers = await PromoCodeUsage.aggregate([
@@ -925,7 +952,14 @@ router.get("/export/codes", jwtAuth, async (req, res) => {
 router.get("/export/users", jwtAuth, async (req, res) => {
   try {
     const { region } = req.query;
-    const filter = region && region !== "all" ? { region } : {};
+    let filter = {};
+    if (region && region !== "all") {
+      if (region === "Toshkent") {
+        filter.region = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+      } else {
+        filter.region = region;
+      }
+    }
     const users = await User.find(filter).sort({ registeredAt: -1 });
 
     const data = users.map((user) => ({
@@ -1039,7 +1073,11 @@ router.post("/random-winner", jwtAuth, async (req, res) => {
     // Filter for promo code usage records
     const usageFilter = {};
     if (region && region !== "all") {
-      usageFilter.userRegion = region;
+      if (region === "Toshkent") {
+        usageFilter.userRegion = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+      } else {
+        usageFilter.userRegion = region;
+      }
     }
     if (seasonId && seasonId !== "all") {
       usageFilter.seasonId = seasonId;

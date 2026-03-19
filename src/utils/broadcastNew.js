@@ -4,7 +4,11 @@ const User = require("../models/User");
 async function sendBroadcast(bot, message, region = null) {
   const filter = {};
   if (region && region !== "all") {
-    filter.region = region;
+    if (region === "Toshkent") {
+      filter.region = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+    } else {
+      filter.region = region;
+    }
   }
 
   const users = await User.find(filter);

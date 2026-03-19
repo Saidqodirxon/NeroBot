@@ -1,4 +1,5 @@
 export const REGIONS = [
+  "Toshkent",
   "Toshkent shahri",
   "Toshkent viloyati",
   "Andijon",

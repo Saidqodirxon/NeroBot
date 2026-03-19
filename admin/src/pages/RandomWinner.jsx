@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api, seasons } from "../services/api";
+import { REGIONS } from "../utils/regions";
 
 export default function RandomWinner() {
   const [count, setCount] = useState(10);
@@ -12,22 +13,6 @@ export default function RandomWinner() {
   const [currentDisplay, setCurrentDisplay] = useState([]);
   const [revealedPhones, setRevealedPhones] = useState({});
   const [revealedIds, setRevealedIds] = useState({});
-
-  const REGIONS = [
-    "Toshkent",
-    "Andijon",
-    "Farg'ona",
-    "Namangan",
-    "Samarqand",
-    "Buxoro",
-    "Xorazm",
-    "Qashqadaryo",
-    "Surxondaryo",
-    "Jizzax",
-    "Sirdaryo",
-    "Navoiy",
-    "Qoraqalpog'iston",
-  ];
 
   useEffect(() => {
     loadSeasons();
