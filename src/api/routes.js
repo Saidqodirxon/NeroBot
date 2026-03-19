@@ -269,8 +269,12 @@ router.get("/users", jwtAuth, async (req, res) => {
     const { region, limit = 100, skip = 0 } = req.query;
 
     const filter = {};
-    if (region) {
-      filter.region = region;
+    if (region && region !== "all") {
+      if (region === "Toshkent") {
+        filter.region = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+      } else {
+        filter.region = region;
+      }
     }
 
     const users = await User.find(filter)
@@ -301,10 +305,27 @@ router.get("/stats", jwtAuth, async (req, res) => {
     const totalUsers = await User.countDocuments();
 
     // Viloyat bo'yicha statistika
-    const usersByRegion = await User.aggregate([
+    const usersByRegionRaw = await User.aggregate([
       { $group: { _id: "$region", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]);
+
+    // Merge Toshkent shahri and Toshkent viloyati in stats
+    const usersByRegionMap = new Map();
+    usersByRegionRaw.forEach((item) => {
+      let regionName = item._id || "Noma'lum";
+      if (regionName === "Toshkent shahri" || regionName === "Toshkent viloyati") {
+        regionName = "Toshkent";
+      }
+      usersByRegionMap.set(
+        regionName,
+        (usersByRegionMap.get(regionName) || 0) + item.count
+      );
+    });
+
+    const usersByRegion = Array.from(usersByRegionMap.entries())
+      .map(([_id, count]) => ({ _id, count }))
+      .sort((a, b) => b.count - a.count);
 
     // Eng ko'p kod ishlatgan userlar (top 10)
     const topUsers = await User.aggregate([
@@ -408,7 +429,14 @@ router.get("/export/codes", jwtAuth, async (req, res) => {
 router.get("/export/users", jwtAuth, async (req, res) => {
   try {
     const { region } = req.query;
-    const filter = region && region !== "all" ? { region } : {};
+    let filter = {};
+    if (region && region !== "all") {
+      if (region === "Toshkent") {
+        filter.region = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+      } else {
+        filter.region = region;
+      }
+    }
     const users = await User.find(filter).sort({ registeredAt: -1 });
 
     // XLSX uchun data tayyorlash
@@ -463,7 +491,11 @@ router.post("/random-winner", jwtAuth, async (req, res) => {
 
     const filter = {};
     if (region && region !== "all") {
-      filter.region = region;
+      if (region === "Toshkent") {
+        filter.region = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+      } else {
+        filter.region = region;
+      }
     }
 
     const users = await User.find(filter);
