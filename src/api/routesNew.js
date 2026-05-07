@@ -8,6 +8,9 @@ const User = require("../models/User");
 const PromoCodeUsage = require("../models/PromoCodeUsage");
 const Season = require("../models/Season");
 const Prize = require("../models/Prize");
+const MasterApplication = require("../models/MasterApplication");
+const MasterPrizeClaim = require("../models/MasterPrizeClaim");
+const WinnerSession = require("../models/WinnerSession");
 const { authMiddleware: jwtAuth } = require("../middleware/auth");
 const { sendBroadcast } = require("../utils/broadcastNew");
 const XLSX = require("xlsx");
@@ -64,6 +67,76 @@ const escapeMarkdown = (text) => {
   if (!text) return "";
   return text.toString().replace(/[_*\[\]()~>#+\-=|{}.!']/g, "\\$&");
 };
+
+const buildDrawingFilter = async ({ region, seasonId, excludeIds = [], excludePromoCodes = [] }) => {
+  const filter = {};
+
+  if (region && region !== "all") {
+    filter.userRegion = region === "Toshkent"
+      ? { $in: ["Toshkent shahri", "Toshkent viloyati"] }
+      : region;
+  }
+  if (seasonId && seasonId !== "all") {
+    filter.seasonId = seasonId;
+  }
+
+  let allowedIds = await User.find({ userType: "user" }).distinct("telegramId");
+  if (excludeIds.length > 0) {
+    allowedIds = allowedIds.filter((id) => !excludeIds.includes(id));
+  }
+
+  if (allowedIds.length > 0) {
+    filter.telegramId = { $in: allowedIds };
+  } else if (excludeIds.length > 0) {
+    return { filter: null, exhausted: true };
+  }
+
+  if (excludePromoCodes.length > 0) {
+    filter.promoCode = { $nin: excludePromoCodes.map((code) => String(code || "").toUpperCase()) };
+  }
+
+  return { filter, exhausted: false };
+};
+
+const loadDrawingPool = async ({ region, seasonId, excludeIds = [], excludePromoCodes = [] }) => {
+  const { filter, exhausted } = await buildDrawingFilter({ region, seasonId, excludeIds, excludePromoCodes });
+  if (exhausted) return { exhausted: true, records: [], pool: [] };
+
+  const records = await PromoCodeUsage.find(filter)
+    .populate("seasonId", "name")
+    .sort({ usedAt: -1 });
+
+  if (!records.length) {
+    return { exhausted: false, records: [], pool: [] };
+  }
+
+  const seenTelegram = new Set();
+  const seenPromo = new Set();
+  const uniqueMap = new Map();
+  for (const r of records) {
+    const promo = String(r.promoCode || "").toUpperCase();
+    if (!r.telegramId || !promo) continue;
+    if (seenTelegram.has(r.telegramId) || seenPromo.has(promo)) continue;
+    seenTelegram.add(r.telegramId);
+    seenPromo.add(promo);
+    uniqueMap.set(`${r.telegramId}:${promo}`, r);
+  }
+
+  const pool = Array.from(uniqueMap.values());
+
+  return { exhausted: false, records, pool };
+};
+
+const formatDrawingParticipant = (r) => ({
+  telegramId: r.telegramId,
+  name: r.userName,
+  phone: r.userPhone,
+  region: r.userRegion,
+  username: r.username,
+  promoCode: String(r.promoCode || "").toUpperCase(),
+  usedAt: r.usedAt,
+  seasonName: r.seasonId?.name || "—",
+});
 
 // ==================== SEASON MANAGEMENT ====================
 
@@ -232,7 +305,7 @@ router.get("/prizes", jwtAuth, async (req, res) => {
 // POST: Create new prize
 router.post("/prizes", jwtAuth, async (req, res) => {
   try {
-    const { name, description, imageUrl, seasonId, isActive } = req.body;
+    const { name, description, imageUrl, seasonId, isActive, prizeType, position, requiredPoints } = req.body;
 
     if (!name || !imageUrl || !seasonId) {
       return res.status(400).json({
@@ -247,6 +320,9 @@ router.post("/prizes", jwtAuth, async (req, res) => {
       imageUrl,
       seasonId,
       isActive: isActive !== undefined ? isActive : true,
+      prizeType: prizeType || "random",
+      position: position !== undefined ? position : null,
+      requiredPoints: requiredPoints !== undefined ? requiredPoints : null,
     });
 
     res.json({
@@ -264,13 +340,14 @@ router.post("/prizes", jwtAuth, async (req, res) => {
 router.put("/prizes/:id", jwtAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, imageUrl, seasonId, isActive } = req.body;
+    const { name, description, imageUrl, seasonId, isActive, prizeType, position, requiredPoints } = req.body;
 
-    const prize = await Prize.findByIdAndUpdate(
-      id,
-      { name, description, imageUrl, seasonId, isActive },
-      { new: true }
-    );
+    const updateData = { name, description, imageUrl, seasonId, isActive };
+    if (prizeType !== undefined) updateData.prizeType = prizeType;
+    if (position !== undefined) updateData.position = position;
+    if (requiredPoints !== undefined) updateData.requiredPoints = requiredPoints;
+
+    const prize = await Prize.findByIdAndUpdate(id, updateData, { new: true });
 
     if (!prize) {
       return res
@@ -695,7 +772,7 @@ router.delete("/promo-codes/:code", jwtAuth, async (req, res) => {
 // GET: Get users with filters
 router.get("/users", jwtAuth, async (req, res) => {
   try {
-    const { region, limit = 100, skip = 0 } = req.query;
+    const { region, limit = 100, skip = 0, userType } = req.query;
 
     const filter = {};
     if (region && region !== "all") {
@@ -704,6 +781,9 @@ router.get("/users", jwtAuth, async (req, res) => {
       } else {
         filter.region = region;
       }
+    }
+    if (userType && userType !== "all") {
+      filter.userType = userType;
     }
 
     const users = await User.find(filter)
@@ -1348,6 +1428,548 @@ Vaqt: ${new Date().toLocaleString("uz-UZ")}
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: "Server xatosi" });
     }
+  }
+});
+
+// ===== USTALAR =====
+
+// GET /masters - ustalar ro'yxati
+router.get("/masters", jwtAuth, async (req, res) => {
+  try {
+    const { search, region, page = 1, limit = 50 } = req.query;
+    const filter = { userType: "master" };
+    if (region) filter.region = region;
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+        { profession: { $regex: search, $options: "i" } },
+      ];
+    }
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [data, total] = await Promise.all([
+      User.find(filter)
+        .sort({ masterApprovedAt: -1, registeredAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .select("telegramId name phone region profession totalPoints masterApprovedAt registeredAt username"),
+      User.countDocuments(filter),
+    ]);
+    res.json({ success: true, total, data });
+  } catch (err) {
+    console.error("GET /masters error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// GET /masters/:telegramId/history - usta kodlar tarixi
+router.get("/masters/:telegramId/history", jwtAuth, async (req, res) => {
+  try {
+    const telegramId = parseInt(req.params.telegramId);
+    const [user, usages] = await Promise.all([
+      User.findOne({ telegramId, userType: "master" }).select("name phone profession totalPoints"),
+      PromoCodeUsage.find({ telegramId }).sort({ usedAt: -1 }),
+    ]);
+    if (!user) return res.status(404).json({ success: false, message: "Usta topilmadi" });
+    res.json({ success: true, user, data: usages });
+  } catch (err) {
+    console.error("GET /masters/:id/history error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ===== USTA ARIZALARI =====
+
+// GET /master-applications - arizalar ro'yxati
+router.get("/master-applications", jwtAuth, async (req, res) => {
+  try {
+    const { status = "pending", page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (status && status !== "all") filter.status = status;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [data, total] = await Promise.all([
+      MasterApplication.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      MasterApplication.countDocuments(filter),
+    ]);
+    res.json({ success: true, total, data });
+  } catch (err) {
+    console.error("GET /master-applications error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST /master-applications/:id/approve - tasdiqlash
+router.post("/master-applications/:id/approve", jwtAuth, async (req, res) => {
+  try {
+    const app = await MasterApplication.findById(req.params.id);
+    if (!app) return res.status(404).json({ success: false, message: "Ariza topilmadi" });
+    if (app.status !== "pending") return res.status(400).json({ success: false, message: "Ariza allaqachon ko'rib chiqilgan" });
+
+    await Promise.all([
+      MasterApplication.updateOne({ _id: app._id }, {
+        status: "approved",
+        reviewedAt: new Date(),
+        reviewedBy: req.admin?.username || "admin",
+      }),
+      User.updateOne({ telegramId: app.telegramId }, {
+        userType: "master",
+        profession: app.profession,
+        masterApprovedAt: new Date(),
+      }),
+    ]);
+
+    if (botInstance) {
+      try {
+        await botInstance.telegram.sendMessage(
+          app.telegramId,
+          "✅ <b>Tabriklaymiz!</b>\n\n" +
+            "Siz <b>Usta</b> maqomini oldingiz!\n\n" +
+            "«👨‍🔧 Mening kabinetim» tugmasini bosib kabinetingizga kiring.",
+          { parse_mode: "HTML" }
+        );
+      } catch (notifyErr) {
+        console.error("Master approve bot notify error:", notifyErr.message);
+      }
+    }
+
+    res.json({ success: true, message: "Ariza tasdiqlandi" });
+  } catch (err) {
+    console.error("POST /master-applications/:id/approve error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST /master-applications/:id/reject - rad etish
+router.post("/master-applications/:id/reject", jwtAuth, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const app = await MasterApplication.findById(req.params.id);
+    if (!app) return res.status(404).json({ success: false, message: "Ariza topilmadi" });
+    if (app.status !== "pending") return res.status(400).json({ success: false, message: "Ariza allaqachon ko'rib chiqilgan" });
+
+    await MasterApplication.updateOne({ _id: app._id }, {
+      status: "rejected",
+      rejectionReason: reason || null,
+      reviewedAt: new Date(),
+      reviewedBy: req.admin?.username || "admin",
+    });
+
+    if (botInstance) {
+      try {
+        await botInstance.telegram.sendMessage(
+          app.telegramId,
+          "❌ <b>Arizangiz rad etildi</b>\n\n" +
+            `Sabab: ${reason || "Ko'rsatilmagan"}\n\n` +
+            "Savollar bo'lsa qo'llab-quvvatlashga murojaat qiling.",
+          { parse_mode: "HTML" }
+        );
+      } catch (notifyErr) {
+        console.error("Master reject bot notify error:", notifyErr.message);
+      }
+    }
+
+    res.json({ success: true, message: "Ariza rad etildi" });
+  } catch (err) {
+    console.error("POST /master-applications/:id/reject error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ===== USTA SOVGA TALABLARI =====
+
+// GET /master-prize-claims - talablar ro'yxati
+router.get("/master-prize-claims", jwtAuth, async (req, res) => {
+  try {
+    const { status = "pending", page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (status && status !== "all") filter.status = status;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [data, total] = await Promise.all([
+      MasterPrizeClaim.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      MasterPrizeClaim.countDocuments(filter),
+    ]);
+    res.json({ success: true, total, data });
+  } catch (err) {
+    console.error("GET /master-prize-claims error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST /master-prize-claims/:id/give - ball ayirish va topshirish
+router.post("/master-prize-claims/:id/give", jwtAuth, async (req, res) => {
+  try {
+    const claim = await MasterPrizeClaim.findById(req.params.id);
+    if (!claim) return res.status(404).json({ success: false, message: "Talab topilmadi" });
+    if (claim.status !== "pending") return res.status(400).json({ success: false, message: "Talab allaqachon ko'rib chiqilgan" });
+
+    const user = await User.findOne({ telegramId: claim.telegramId });
+    if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
+    if (user.totalPoints < claim.requiredPoints) {
+      return res.status(400).json({ success: false, message: `Yetarli ball yo'q. Kerakli: ${claim.requiredPoints}, Mavjud: ${user.totalPoints}` });
+    }
+
+    await Promise.all([
+      User.updateOne({ telegramId: claim.telegramId }, { $inc: { totalPoints: -claim.requiredPoints } }),
+      MasterPrizeClaim.updateOne({ _id: claim._id }, {
+        status: "given",
+        givenAt: new Date(),
+        givenBy: req.admin?.username || "admin",
+      }),
+    ]);
+
+    if (botInstance) {
+      try {
+        await botInstance.telegram.sendMessage(
+          claim.telegramId,
+          `🎁 <b>Tabriklaymiz!</b>\n\n` +
+            `"${claim.prizeName}" sovg'asi tayyor!\n` +
+            `${claim.requiredPoints} ball hisobingizdan ayirildi.\n\n` +
+            "Admin bilan bog'laning yoki bizga keling.",
+          { parse_mode: "HTML" }
+        );
+      } catch (notifyErr) {
+        console.error("Prize claim give bot notify error:", notifyErr.message);
+      }
+    }
+
+    res.json({ success: true, message: "Sovg'a topshirildi va ball ayirildi" });
+  } catch (err) {
+    console.error("POST /master-prize-claims/:id/give error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ===== G'OLIB SESSIYALARI =====
+
+// POST /winner-sessions - sessiya saqlash
+router.post("/winner-sessions", jwtAuth, async (req, res) => {
+  try {
+    const { title, seasonId, region, selectionType, position, count, winners } = req.body;
+    const session = await WinnerSession.create({
+      title,
+      seasonId: seasonId || null,
+      region: region || null,
+      selectionType,
+      position: position || null,
+      count: count || null,
+      winners: winners || [],
+      createdBy: req.admin?.username || "admin",
+    });
+    res.json({ success: true, data: session });
+  } catch (err) {
+    console.error("POST /winner-sessions error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// GET /winner-sessions - sessiyalar ro'yxati
+router.get("/winner-sessions", jwtAuth, async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [data, total] = await Promise.all([
+      WinnerSession.find().sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit))
+        .populate("seasonId", "name"),
+      WinnerSession.countDocuments(),
+    ]);
+    res.json({ success: true, total, data });
+  } catch (err) {
+    console.error("GET /winner-sessions error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// GET /winner-sessions/:id - bitta sessiya
+router.get("/winner-sessions/:id", jwtAuth, async (req, res) => {
+  try {
+    const session = await WinnerSession.findById(req.params.id).populate("seasonId", "name");
+    if (!session) return res.status(404).json({ success: false, message: "Sessiya topilmadi" });
+    res.json({ success: true, data: session });
+  } catch (err) {
+    console.error("GET /winner-sessions/:id error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ===== DRAWING SYSTEM (new slot-machine style) =====
+
+router.get("/drawing/preview", jwtAuth, async (req, res) => {
+  try {
+    const { region = "all", seasonId = "all" } = req.query;
+    const { pool } = await loadDrawingPool({ region, seasonId, excludeIds: [] });
+    res.json({ success: true, totalParticipants: pool.length });
+  } catch (err) {
+    console.error("drawing/preview error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+router.post("/drawing/start", jwtAuth, async (req, res) => {
+  try {
+    const { region, seasonId, excludeIds = [], excludePromoCodes = [] } = req.body;
+
+    const filter = {};
+    if (region && region !== "all") {
+      filter.userRegion = region === "Toshkent"
+        ? { $in: ["Toshkent shahri", "Toshkent viloyati"] }
+        : region;
+    }
+    if (seasonId && seasonId !== "all") filter.seasonId = seasonId;
+
+    let allowedIds = await User.find({ userType: "user" }).distinct("telegramId");
+    if (excludeIds.length > 0) {
+      allowedIds = allowedIds.filter((id) => !excludeIds.includes(id));
+    }
+    if (allowedIds.length > 0) {
+      filter.telegramId = { $in: allowedIds };
+    } else if (excludeIds.length > 0) {
+      return res.json({ success: false, message: "Qo'shimcha ishtirokchilar qolmadi" });
+    }
+
+    const records = await PromoCodeUsage.find(filter)
+      .populate("seasonId", "name")
+      .sort({ usedAt: -1 });
+
+    if (!records.length) {
+      return res.json({ success: false, message: "Ishtirokchilar topilmadi" });
+    }
+
+    // Unique users and promo codes
+    const seenTelegram = new Set();
+    const seenPromo = new Set();
+    const pool = [];
+    for (const r of records) {
+      const promo = String(r.promoCode || "").toUpperCase();
+      if (!r.telegramId || !promo) continue;
+      if (seenTelegram.has(r.telegramId) || seenPromo.has(promo)) continue;
+      if (excludePromoCodes.map((code) => String(code || "").toUpperCase()).includes(promo)) continue;
+      seenTelegram.add(r.telegramId);
+      seenPromo.add(promo);
+      pool.push(r);
+    }
+
+    if (!pool.length) {
+      return res.json({ success: false, message: "Ishtirokchilar topilmadi" });
+    }
+
+    const winnerRecord = pool[Math.floor(Math.random() * pool.length)];
+    const winner = {
+      telegramId: winnerRecord.telegramId,
+      name: winnerRecord.userName,
+      phone: winnerRecord.userPhone,
+      region: winnerRecord.userRegion,
+      username: winnerRecord.username,
+      promoCode: winnerRecord.promoCode,
+      usedAt: winnerRecord.usedAt,
+      seasonName: winnerRecord.seasonId?.name || "—",
+    };
+
+    const participants = pool.map((r) => ({
+      telegramId: r.telegramId,
+      name: r.userName,
+      phone: r.userPhone,
+      region: r.userRegion,
+      username: r.username,
+      promoCode: String(r.promoCode || "").toUpperCase(),
+      usedAt: r.usedAt,
+      seasonName: r.seasonId?.name || "—",
+    }));
+
+    res.json({
+      success: true,
+      totalParticipants: pool.length,
+      winner,
+      participants,
+      allCodes: participants.map((p) => p.promoCode),
+    });
+  } catch (err) {
+    console.error("drawing/start error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+router.post("/drawing/export-xlsx", jwtAuth, async (req, res) => {
+  try {
+    const { winners = [], sessionTitle = "goliblar" } = req.body;
+    const rows = winners.map((w, index) => ({
+      "#": index + 1,
+      Ism: w.name || "-",
+      Telefon: w.phone || "-",
+      Viloyat: w.region || "-",
+      Kod: w.promoCode || "-",
+      Username: w.username ? `@${w.username}` : "-",
+      Mavsum: w.seasonName || "-",
+      "Telegram ID": w.telegramId || "-",
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+      { wch: 5 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 20 },
+      { wch: 16 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "G'oliblar");
+
+    const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const safeName = String(sessionTitle || "goliblar")
+      .replace(/[^\w\-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "goliblar";
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename=${safeName}.xlsx`);
+    res.send(buffer);
+  } catch (error) {
+    console.error("Drawing export xlsx error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ===== DRAWING SYSTEM =====
+
+// POST /drawing/start — G'olib tanlash tizimi
+router.post("/drawing/start", jwtAuth, async (req, res) => {
+  try {
+    const { region, seasonId, excludeIds = [], excludePromoCodes = [] } = req.body;
+
+    const usageFilter = {};
+    if (region && region !== "all") {
+      if (region === "Toshkent") {
+        usageFilter.userRegion = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
+      } else {
+        usageFilter.userRegion = region;
+      }
+    }
+    if (seasonId && seasonId !== "all") {
+      usageFilter.seasonId = seasonId;
+    }
+
+    // Faqat user rollar
+    let allowedIds = await User.find({ userType: "user" }).distinct("telegramId");
+    // Oldingi g'oliblarni chiqarib tashlash
+    if (excludeIds.length > 0) {
+      allowedIds = allowedIds.filter((id) => !excludeIds.includes(id));
+    }
+    if (allowedIds.length > 0) {
+      usageFilter.telegramId = { $in: allowedIds };
+    } else if (excludeIds.length > 0) {
+      return res.json({ success: false, message: "Qo'shimcha ishtirokchilar qolmadi" });
+    }
+
+    const usageRecords = await PromoCodeUsage.find(usageFilter)
+      .populate("seasonId")
+      .sort({ usedAt: -1 });
+
+    if (usageRecords.length === 0) {
+      return res.json({ success: false, message: "Ishtirokchilar topilmadi" });
+    }
+
+    const seenTelegram = new Set();
+    const seenPromo = new Set();
+    const pool = [];
+    const excludedPromos = excludePromoCodes.map((code) => String(code || "").toUpperCase());
+    for (const r of usageRecords) {
+      const promo = String(r.promoCode || "").toUpperCase();
+      if (!r.telegramId || !promo) continue;
+      if (seenTelegram.has(r.telegramId) || seenPromo.has(promo)) continue;
+      if (excludedPromos.includes(promo)) continue;
+      seenTelegram.add(r.telegramId);
+      seenPromo.add(promo);
+      pool.push(r);
+    }
+
+    if (pool.length === 0) {
+      return res.json({ success: false, message: "Noyob ishtirokchilar topilmadi" });
+    }
+
+    const winnerRecord = pool[Math.floor(Math.random() * pool.length)];
+
+    const winner = {
+      telegramId: winnerRecord.telegramId,
+      name:       winnerRecord.userName,
+      phone:      winnerRecord.userPhone,
+      region:     winnerRecord.userRegion,
+      username:   winnerRecord.username,
+      promoCode:  winnerRecord.promoCode,
+      usedAt:     winnerRecord.usedAt,
+      seasonName: winnerRecord.seasonId?.name || "—",
+    };
+
+    const allCodes = pool.map((r) => r.promoCode.toUpperCase());
+
+    res.json({
+      success:           true,
+      winner,
+      allCodes,
+      totalParticipants: pool.length,
+    });
+  } catch (error) {
+    console.error("Drawing start error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST /drawing/notify — G'olib(lar)ni admin guruhga yuborish
+router.post("/drawing/notify", jwtAuth, async (req, res) => {
+  try {
+    const { winners, sessionTitle } = req.body;
+    if (!winners || !winners.length) {
+      return res.status(400).json({ success: false, message: "G'oliblar ko'rsatilmagan" });
+    }
+
+    const titleLine = sessionTitle ? `🎯 *${escapeMarkdown(sessionTitle)}*\n\n` : "🎯 *G'olib\\(lar\\)*\n\n";
+    let sent = 0;
+    let sentToWinners = 0;
+    for (let i = 0; i < winners.length; i++) {
+      const w = winners[i];
+      try {
+        if (botInstance && process.env.ADMIN_GROUP_ID) {
+          await botInstance.telegram.sendMessage(
+            process.env.ADMIN_GROUP_ID,
+            titleLine +
+              `🏆 *${i + 1}\\-o'rin g'olibi*\n\n` +
+              `👤 *Ism:* ${escapeMarkdown(w.name)}\n` +
+              `📱 *Telefon:* ${escapeMarkdown(w.phone)}\n` +
+              `🗺 *Viloyat:* ${escapeMarkdown(w.region)}\n` +
+              (w.username ? `✈️ *Username:* @${escapeMarkdown(w.username)}\n` : "") +
+              `🆔 *Telegram ID:* \`${w.telegramId}\`\n` +
+              `🎟 *Kod:* \`${escapeMarkdown(w.promoCode)}\`\n` +
+              (w.seasonName ? `🎭 *Mavsum:* ${escapeMarkdown(w.seasonName)}\n` : "") +
+              `\n⏰ ${escapeMarkdown(new Date().toLocaleString("uz-UZ"))}`,
+            { parse_mode: "MarkdownV2" }
+          );
+          sent++;
+        }
+        if (botInstance && w.telegramId) {
+          await botInstance.telegram.sendMessage(
+            w.telegramId,
+            `Tabriklaymiz! Siz g'olib bo'ldingiz.\n\n` +
+              `O'rin: ${i + 1}\n` +
+              `Ism: ${w.name || "-"}\n` +
+              `Kod: ${w.promoCode || "-"}\n` +
+              `Mavsum: ${w.seasonName || "-"}\n` +
+              `Viloyat: ${w.region || "-"}`
+          );
+          sentToWinners++;
+        }
+      } catch (err) {
+        console.error("Notify send error:", err.message);
+      }
+    }
+
+    res.json({ success: true, sent, sentToWinners });
+  } catch (error) {
+    console.error("Drawing notify error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
   }
 });
 

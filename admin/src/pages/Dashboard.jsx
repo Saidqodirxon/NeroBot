@@ -1,5 +1,6 @@
 import React from "react";
-import { Link, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Layout from "../components/Layout";
 import PromoCodes from "./Groups";
 import Stats from "./Stats";
 import Users from "./UsersNew";
@@ -8,131 +9,28 @@ import Seasons from "./Seasons";
 import RandomWinner from "./RandomWinner";
 import Prizes from "./Prizes";
 import Settings from "./Settings";
+import MasterApplications from "./MasterApplications";
+import Masters from "./Masters";
+import MasterPrizeClaims from "./MasterPrizeClaims";
 
 export default function Dashboard() {
-  const logout = () => {
-    localStorage.removeItem("nerobot_token");
-    window.location.href = "/login";
-  };
-
   return (
-    <div className="container">
-      <div className="header">
-        <h2>NeroBot Admin</h2>
-        <div>
-          <button className="button" onClick={logout}>
-            Chiqish
-          </button>
-        </div>
-      </div>
-
-      <nav
-        style={{
-          marginBottom: 24,
-          borderBottom: "2px solid #eee",
-          paddingBottom: 12,
-        }}
-      >
-        <Link
-          to="/app/stats"
-          style={{
-            marginRight: 24,
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          📊 Statistika
-        </Link>
-        <Link
-          to="/app/seasons"
-          style={{
-            marginRight: 24,
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          🎭 Mavsumlar
-        </Link>
-        <Link
-          to="/app/codes"
-          style={{
-            marginRight: 24,
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          📝 Promo Kodlar
-        </Link>
-        <Link
-          to="/app/users"
-          style={{
-            marginRight: 24,
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          👥 Foydalanuvchilar
-        </Link>
-        <Link
-          to="/app/prizes"
-          style={{
-            marginRight: 24,
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          🎁 Sovg'alar
-        </Link>
-        <Link
-          to="/app/winner"
-          style={{
-            marginRight: 24,
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          🎲 G'olib Tanlash
-        </Link>
-        <Link
-          to="/app/broadcast"
-          style={{
-            marginRight: 24,
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          📢 Yangilik Yuborish
-        </Link>
-        <Link
-          to="/app/settings"
-          style={{
-            padding: "8px 16px",
-            textDecoration: "none",
-            fontWeight: 500,
-          }}
-        >
-          ⚙️ Sozlamalar
-        </Link>
-      </nav>
-
+    <Layout>
       <Routes>
-        <Route path="/stats" element={<Stats />} />
-        <Route path="/seasons" element={<Seasons />} />
-        <Route path="/codes" element={<PromoCodes />} />
-        <Route path="/users" element={<Users />} />
-        <Route path="/prizes" element={<Prizes />} />
-        <Route path="/winner" element={<RandomWinner />} />
-        <Route path="/broadcast" element={<Broadcast />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/" element={<Navigate to="/app/stats" replace />} />
+        <Route index element={<Navigate to="stats" replace />} />
+        <Route path="stats"        element={<Stats />} />
+        <Route path="seasons"      element={<Seasons />} />
+        <Route path="codes"        element={<PromoCodes />} />
+        <Route path="users"        element={<Users />} />
+        <Route path="prizes"       element={<Prizes />} />
+        <Route path="winner"       element={<RandomWinner />} />
+        <Route path="broadcast"    element={<Broadcast />} />
+        <Route path="settings"     element={<Settings />} />
+        <Route path="master-apps"  element={<MasterApplications />} />
+        <Route path="masters"      element={<Masters />} />
+        <Route path="prize-claims" element={<MasterPrizeClaims />} />
+        <Route path="*"            element={<Navigate to="stats" replace />} />
       </Routes>
-    </div>
+    </Layout>
   );
 }

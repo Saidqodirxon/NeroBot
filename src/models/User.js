@@ -53,6 +53,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    userType: {
+      type: String,
+      enum: ['user', 'master'],
+      default: 'user',
+      index: true,
+    },
+    profession: {
+      type: String,
+      default: null,
+    },
+    masterApprovedAt: {
+      type: Date,
+      default: null,
+    },
     registeredAt: {
       type: Date,
       default: Date.now,

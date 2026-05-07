@@ -7,566 +7,243 @@ export default function Users() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [regionFilter, setRegionFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
   const [seasonsList, setSeasonsList] = useState([]);
   const [selectedSeason, setSelectedSeason] = useState("all");
 
-  useEffect(() => {
-    loadSeasons();
-    load();
-  }, [regionFilter]);
+  useEffect(() => { loadSeasons(); load(); }, [regionFilter, roleFilter]);
 
   const loadSeasons = async () => {
-    try {
-      const res = await seasons.getAll();
-      setSeasonsList(res.data.data || []);
-    } catch (err) {
-      console.error("Mavsumlarni yuklab bo'lmadi:", err);
-    }
+    try { const res = await seasons.getAll(); setSeasonsList(res.data.data || []); } catch {}
   };
 
   const load = async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const params = regionFilter ? { region: regionFilter } : {};
+      const params = {};
+      if (regionFilter) params.region = regionFilter;
+      if (roleFilter) params.userType = roleFilter;
       const res = await users.getAll(params);
       setList(res.data.data || []);
-    } catch (err) {
-      console.error("Users load error:", err);
-      setError("Ma'lumotlarni yuklashda xatolik yuz berdi");
-    }
+    } catch { setError("Ma'lumotlarni yuklashda xatolik"); }
     setLoading(false);
   };
 
   const loadUserDetails = async (user) => {
+    setSelectedUser(user); setShowModal(true); setUserDetails(null);
     try {
-      setSelectedUser(user);
-      setShowDetailsModal(true);
-      const res = await users.getDetails(
-        user.telegramId,
-        selectedSeason === "all" ? null : selectedSeason
-      );
+      const res = await users.getDetails(user.telegramId, selectedSeason === "all" ? null : selectedSeason);
       setUserDetails(res.data.data);
-    } catch (err) {
-      alert("Xatolik: " + (err.response?.data?.message || err.message));
-    }
+    } catch (err) { alert("Xatolik: " + (err.response?.data?.message || err.message)); }
   };
 
   const exportUsers = () => {
     const token = localStorage.getItem("nerobot_token");
-    const baseUrl =
-      import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
-    const url = regionFilter
-      ? `${baseUrl}/export/users?region=${regionFilter}`
-      : `${baseUrl}/export/users`;
-
-    fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => res.blob())
-      .then((blob) => {
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = "users.xlsx";
-        a.click();
-      })
-      .catch((err) => alert("Xatolik: " + err.message));
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
+    const url = regionFilter ? `${base}/export/users?region=${regionFilter}` : `${base}/export/users`;
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.blob())
+      .then((blob) => { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "users.xlsx"; a.click(); })
+      .catch((e) => alert("Xatolik: " + e.message));
   };
 
   const exportUserHistory = async () => {
     if (!selectedUser) return;
-
     try {
-      const seasonId = selectedSeason === "all" ? null : selectedSeason;
-      const res = await users.exportHistory(selectedUser.telegramId, seasonId);
-
-      const downloadUrl = window.URL.createObjectURL(res.data);
+      const res = await users.exportHistory(selectedUser.telegramId, selectedSeason === "all" ? null : selectedSeason);
       const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = `user_${selectedUser.telegramId}_codes.xlsx`;
-      a.click();
-    } catch (err) {
-      alert("Xatolik: " + (err.response?.data?.message || err.message));
-    }
+      a.href = URL.createObjectURL(res.data);
+      a.download = `user_${selectedUser.telegramId}_codes.xlsx`; a.click();
+    } catch (err) { alert("Xatolik: " + (err.response?.data?.message || err.message)); }
   };
 
   const handleDeleteCode = async (code) => {
-    if (
-      !window.confirm(
-        `Rostdan ham ${code} kodini o'chirmoqchimisiz?\nBu kod bazadan va user tarixidan butunlay o'chiriladi.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await promoCodes.delete(code);
-      // Refresh user details
-      loadUserDetails(selectedUser);
-    } catch (err) {
-      alert("Xatolik: " + (err.response?.data?.message || err.message));
-    }
+    if (!window.confirm(`${code} kodini o'chirmoqchimisiz?`)) return;
+    try { await promoCodes.delete(code); loadUserDetails(selectedUser); }
+    catch (err) { alert("Xatolik: " + (err.response?.data?.message || err.message)); }
   };
 
   const blockUser = async (userId) => {
-    const reason = prompt("Bloklash sababini kiriting (ixtiyoriy):");
-    if (reason === null) return; // Cancel bosilsa
-
-    try {
-      await users.block(userId, reason || undefined);
-      alert("Foydalanuvchi bloklandi");
-      load(); // Ro'yxatni yangilash
-      if (showDetailsModal) {
-        setShowDetailsModal(false);
-        setSelectedUser(null);
-      }
-    } catch (err) {
-      alert("Xatolik: " + (err.response?.data?.message || err.message));
-    }
+    const reason = prompt("Bloklash sababi (ixtiyoriy):");
+    if (reason === null) return;
+    try { await users.block(userId, reason || undefined); alert("Bloklandi"); load(); setShowModal(false); }
+    catch (err) { alert("Xatolik: " + (err.response?.data?.message || err.message)); }
   };
 
   const unblockUser = async (userId) => {
-    if (!confirm("Foydalanuvchini blokdan chiqarasizmi?")) return;
-
-    try {
-      await users.unblock(userId);
-      alert("Foydalanuvchi blokdan chiqarildi");
-      load(); // Ro'yxatni yangilash
-      if (showDetailsModal) {
-        setShowDetailsModal(false);
-        setSelectedUser(null);
-      }
-    } catch (err) {
-      alert("Xatolik: " + (err.response?.data?.message || err.message));
-    }
+    if (!confirm("Blokdan chiqarasizmi?")) return;
+    try { await users.unblock(userId); alert("Blokdan chiqarildi"); load(); setShowModal(false); }
+    catch (err) { alert("Xatolik: " + (err.response?.data?.message || err.message)); }
   };
+
+  const filtered = list.filter((u) => {
+    const q = searchQuery.toLowerCase();
+    return !q || u.name?.toLowerCase().includes(q) || u.phone?.includes(searchQuery) ||
+      String(u.telegramId).includes(searchQuery) || u.username?.toLowerCase().includes(q);
+  });
 
   return (
     <div>
-      <h3>👥 Foydalanuvchilar</h3>
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 12,
-          gap: 12,
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{ display: "flex", gap: 12, alignItems: "center", flex: 1 }}
-        >
-          <input
-            type="text"
-            className="input"
-            placeholder="🔍 Qidirish (ism, telefon, ID)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ width: 300 }}
-          />
-          <select
-            className="input"
-            value={regionFilter}
-            onChange={(e) => setRegionFilter(e.target.value)}
-            style={{ width: 250 }}
-          >
-            <option value="">Barcha viloyatlar</option>
-            {REGIONS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-          <div>
-            <strong>Natija:</strong>{" "}
-            {
-              list.filter((user) => {
-                const searchLower = searchQuery.toLowerCase();
-                return (
-                  user.name?.toLowerCase().includes(searchLower) ||
-                  user.phone?.includes(searchQuery) ||
-                  user.telegramId?.toString().includes(searchQuery) ||
-                  user.username?.toLowerCase().includes(searchLower)
-                );
-              }).length
-            }{" "}
-            ta foydalanuvchi
-          </div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">👥 Foydalanuvchilar</h1>
+          <p className="page-subtitle">Jami: {filtered.length} ta</p>
         </div>
-        <button className="button" onClick={exportUsers}>
-          📥 Excel yuklab olish
-        </button>
+        <button className="button btn-success btn-sm" onClick={exportUsers}>📥 Excel</button>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: "center", padding: 40 }}>
-          <div>⏳ Yuklanmoqda...</div>
-        </div>
-      ) : error ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: 40,
-            color: "#f44336",
-          }}
-        >
-          {error}
-        </div>
-      ) : list.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
-          Foydalanuvchilar topilmadi
-        </div>
-      ) : (
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: 14,
-          }}
-        >
-          <thead>
-            <tr
-              style={{
-                background: "#f5f5f5",
-                textAlign: "left",
-                borderBottom: "2px solid #ddd",
-              }}
-            >
-              <th style={{ padding: "12px 8px" }}>#</th>
-              <th style={{ padding: "12px 8px" }}>Ism</th>
-              <th style={{ padding: "12px 8px" }}>Telefon</th>
-              <th style={{ padding: "12px 8px" }}>Viloyat</th>
-              <th style={{ padding: "12px 8px" }}>Username</th>
-              <th style={{ padding: "12px 8px" }}>Ball</th>
-              <th style={{ padding: "12px 8px" }}>Telegram ID</th>
-              <th style={{ padding: "12px 8px" }}>Sana</th>
-              <th style={{ padding: "12px 8px" }}>Amallar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list
-              .filter((user) => {
-                const searchLower = searchQuery.toLowerCase();
-                return (
-                  user.name?.toLowerCase().includes(searchLower) ||
-                  user.phone?.includes(searchQuery) ||
-                  user.telegramId?.toString().includes(searchQuery) ||
-                  user.username?.toLowerCase().includes(searchLower)
-                );
-              })
-              .map((user, idx) => (
-                <tr
-                  key={user._id}
-                  style={{
-                    borderBottom: "1px solid #eee",
-                    background: idx % 2 === 0 ? "#fafafa" : "white",
-                  }}
-                >
-                  <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
-                  <td style={{ padding: "10px 8px", fontWeight: 500 }}>
-                    {user.name}
+      <div className="filters-bar">
+        <input className="input" placeholder="🔍 Ism, telefon, ID, username..."
+          value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: 280 }} />
+        <select className="input" value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} style={{ width: 200 }}>
+          <option value="">Barcha viloyatlar</option>
+          {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <select className="input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} style={{ width: 180 }}>
+          <option value="">Barcha rollar</option>
+          <option value="user">👤 Foydalanuvchilar</option>
+          <option value="master">👨‍🔧 Ustalar</option>
+        </select>
+        <button className="button btn-secondary btn-sm" onClick={load}>🔄</button>
+      </div>
+
+      {error && <div className="alert alert-danger">{error}</div>}
+
+      <div className="table-container">
+        {loading ? (
+          <div className="loading-center">⏳ Yuklanmoqda...</div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state"><div className="empty-icon">👥</div><p>Foydalanuvchilar topilmadi</p></div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Ism</th><th>Telefon</th><th>Viloyat</th>
+                <th>Username</th><th>Ball</th><th>Rol</th>
+                <th>Telegram ID</th><th>Sana</th><th>Amallar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((u, i) => (
+                <tr key={u._id}>
+                  <td className="text-muted">{i + 1}</td>
+                  <td>
+                    <strong>{u.name}</strong>
+                    {u.isBlocked && <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>🚫 Bloklangan</span>}
                   </td>
-                  <td style={{ padding: "10px 8px", fontFamily: "monospace" }}>
-                    {user.phone}
+                  <td className="monospace">{u.phone}</td>
+                  <td>{u.region}</td>
+                  <td className="text-muted">{u.username ? `@${u.username}` : "—"}</td>
+                  <td>
+                    {u.userType === "master"
+                      ? <span className="text-success fw-bold">⭐ {u.totalPoints || 0}</span>
+                      : <span className="text-muted">—</span>
+                    }
                   </td>
-                  <td style={{ padding: "10px 8px" }}>{user.region}</td>
-                  <td style={{ padding: "10px 8px" }}>
-                    {user.username ? `@${user.username}` : "—"}
+                  <td>
+                    <span className={`badge ${u.userType === "master" ? "badge-success" : "badge-info"}`}>
+                      {u.userType === "master" ? "👨‍🔧 Usta" : "👤 User"}
+                    </span>
                   </td>
-                  <td style={{ padding: "10px 8px", fontWeight: "bold", color: "green" }}>
-                    {user.totalPoints || 0}
-                  </td>
-                  <td style={{ padding: "10px 8px", fontFamily: "monospace" }}>
-                    {user.telegramId}
-                  </td>
-                  <td style={{ padding: "10px 8px", fontSize: 12 }}>
-                    {new Date(user.registeredAt).toLocaleDateString("uz-UZ")}
-                  </td>
-                  <td style={{ padding: "10px 8px" }}>
-                    <button
-                      className="button"
-                      onClick={() => loadUserDetails(user)}
-                      style={{
-                        padding: "4px 12px",
-                        fontSize: 12,
-                        background: "#2196F3",
-                        marginRight: 8,
-                      }}
-                    >
-                      📊 Tafsilotlar
-                    </button>
-                    {user.isBlocked ? (
-                      <button
-                        className="button"
-                        onClick={() => unblockUser(user._id)}
-                        style={{
-                          padding: "4px 12px",
-                          fontSize: 12,
-                          background: "#4CAF50",
-                        }}
-                      >
-                        ✅ Blokdan chiqarish
-                      </button>
-                    ) : (
-                      <button
-                        className="button"
-                        onClick={() => blockUser(user._id)}
-                        style={{
-                          padding: "4px 12px",
-                          fontSize: 12,
-                          background: "#f44336",
-                        }}
-                      >
-                        🚫 Bloklash
-                      </button>
-                    )}
+                  <td className="monospace text-muted" style={{ fontSize: 12 }}>{u.telegramId}</td>
+                  <td className="text-muted" style={{ fontSize: 12 }}>{new Date(u.registeredAt).toLocaleDateString("uz-UZ")}</td>
+                  <td>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button className="button btn-sm" style={{ background: "var(--primary)" }} onClick={() => loadUserDetails(u)}>📊</button>
+                      {u.isBlocked
+                        ? <button className="button btn-success btn-sm" onClick={() => unblockUser(u._id)}>✅</button>
+                        : <button className="button btn-danger btn-sm" onClick={() => blockUser(u._id)}>🚫</button>
+                      }
+                    </div>
                   </td>
                 </tr>
               ))}
-          </tbody>
-        </table>
-      )}
+            </tbody>
+          </table>
+        )}
+      </div>
 
-      {/* User Details Modal */}
-      {showDetailsModal && selectedUser && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              padding: 24,
-              borderRadius: 8,
-              minWidth: 700,
-              maxWidth: 900,
-              maxHeight: "90vh",
-              overflow: "auto",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 16,
-              }}
-            >
-              <h3 style={{ margin: 0 }}>👤 {selectedUser.name}</h3>
-              <button
-                className="button"
-                onClick={() => {
-                  setShowDetailsModal(false);
-                  setSelectedUser(null);
-                  setUserDetails(null);
-                }}
-                style={{ background: "#666" }}
-              >
-                ✕ Yopish
-              </button>
+      {/* Details Modal */}
+      {showModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => { setShowModal(false); setSelectedUser(null); setUserDetails(null); }}>
+          <div className="modal" style={{ maxWidth: 800 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">
+                👤 {selectedUser.name}
+                <span className={`badge ${selectedUser.userType === "master" ? "badge-success" : "badge-info"}`} style={{ marginLeft: 10, fontSize: 12 }}>
+                  {selectedUser.userType === "master" ? "👨‍🔧 Usta" : "👤 User"}
+                </span>
+              </h2>
+              <button className="modal-close" onClick={() => { setShowModal(false); setSelectedUser(null); setUserDetails(null); }}>✕</button>
             </div>
-
-            <div
-              style={{
-                background: "#f5f5f5",
-                padding: 16,
-                borderRadius: 8,
-                marginBottom: 16,
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                  fontSize: 14,
-                }}
-              >
-                <div>
-                  <strong>📱 Telefon:</strong>{" "}
-                  <a
-                    href={`tel:${selectedUser.phone}`}
-                    style={{ color: "#1976d2", textDecoration: "none" }}
-                  >
-                    {selectedUser.phone}
-                  </a>
-                </div>
-                <div>
-                  <strong>🗺 Viloyat:</strong> {selectedUser.region}
-                </div>
-                <div>
-                  <strong>✈️ Username:</strong>{" "}
-                  {selectedUser.username ? (
-                    <a
-                      href={`tg://resolve?domain=${selectedUser.username}`}
-                      style={{ color: "#1976d2", textDecoration: "none" }}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      @{selectedUser.username}
-                    </a>
-                  ) : (
-                    "Yo'q"
-                  )}
-                </div>
-                <div>
-                  <strong>🆔 Telegram ID:</strong> {selectedUser.telegramId}
-                </div>
-                <div>
-                  <strong>📅 Ro'yxatdan o'tgan:</strong>{" "}
-                  {new Date(selectedUser.registeredAt).toLocaleString("uz-UZ")}
-                </div>
+            <div className="modal-body">
+              {/* User info */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20, padding: "14px 16px", background: "#f8fafc", borderRadius: 10, fontSize: 13.5 }}>
+                <div>📱 <strong>Telefon:</strong> <a href={`tel:${selectedUser.phone}`} style={{ color: "var(--primary)" }}>{selectedUser.phone}</a></div>
+                <div>🗺 <strong>Viloyat:</strong> {selectedUser.region}</div>
+                <div>✈️ <strong>Username:</strong> {selectedUser.username ? <a href={`https://t.me/${selectedUser.username}`} target="_blank" rel="noreferrer" style={{ color: "var(--primary)" }}>@{selectedUser.username}</a> : "—"}</div>
+                <div>🆔 <strong>Telegram ID:</strong> <span className="monospace">{selectedUser.telegramId}</span></div>
+                <div>📅 <strong>Ro'yxat:</strong> {new Date(selectedUser.registeredAt).toLocaleDateString("uz-UZ")}</div>
+                {selectedUser.isBlocked && <div>🚫 <strong>Sabab:</strong> {selectedUser.blockedReason || "—"}</div>}
               </div>
+
+              {/* Codes filter */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <strong style={{ fontSize: 14 }}>🎟 Kodlar tarixi</strong>
+                  <select className="input" value={selectedSeason}
+                    onChange={(e) => { setSelectedSeason(e.target.value); loadUserDetails(selectedUser); }}
+                    style={{ minWidth: 180 }}>
+                    <option value="all">Barcha mavsumlar</option>
+                    {seasonsList.map((s) => <option key={s._id} value={s._id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <button className="button btn-success btn-sm" onClick={exportUserHistory}>📥 Excel</button>
+              </div>
+
+              {!userDetails ? (
+                <div className="loading-center">⏳ Yuklanmoqda...</div>
+              ) : userDetails.usageHistory.length === 0 ? (
+                <p className="text-muted">Bu foydalanuvchi hali kod ishlatmagan</p>
+              ) : (
+                <div>
+                  <div style={{ display: "flex", gap: 20, marginBottom: 12, fontSize: 13.5 }}>
+                    <span>📊 Kodlar: <strong>{userDetails.totalCodes}</strong></span>
+                    <span className="text-success">⭐ Ball: <strong>{userDetails.user?.totalPoints || 0}</strong></span>
+                  </div>
+                  <table className="data-table">
+                    <thead>
+                      <tr><th>#</th><th>Promo Kod</th><th>Ball</th><th>Mavsum</th><th>Sana</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {userDetails.usageHistory.map((u, i) => (
+                        <tr key={u._id}>
+                          <td className="text-muted">{i + 1}</td>
+                          <td className="monospace fw-bold">{u.promoCode}</td>
+                          <td className="text-success fw-bold">{u.points || 0}</td>
+                          <td className="text-muted">{u.seasonId?.name || "—"}</td>
+                          <td className="text-muted" style={{ fontSize: 12 }}>{new Date(u.usedAt).toLocaleString("uz-UZ")}</td>
+                          <td>
+                            <button className="button btn-danger btn-sm" title="O'chirish" onClick={() => handleDeleteCode(u.promoCode)}>🗑</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <h4 style={{ margin: 0 }}>🎟 Ishlatilgan Kodlar</h4>
-                <select
-                  className="input"
-                  value={selectedSeason}
-                  onChange={(e) => {
-                    setSelectedSeason(e.target.value);
-                    loadUserDetails(selectedUser);
-                  }}
-                  style={{ minWidth: 200 }}
-                >
-                  <option value="all">Barcha mavsumlar</option>
-                  {seasonsList.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                className="button"
-                onClick={exportUserHistory}
-                style={{ background: "#4caf50" }}
-              >
-                📥 Excel yuklab olish
-              </button>
+            <div className="modal-footer">
+              {selectedUser.isBlocked
+                ? <button className="button btn-success" onClick={() => unblockUser(selectedUser._id)}>✅ Blokdan chiqarish</button>
+                : <button className="button btn-danger" onClick={() => blockUser(selectedUser._id)}>🚫 Bloklash</button>
+              }
+              <button className="button btn-secondary" onClick={() => { setShowModal(false); setSelectedUser(null); setUserDetails(null); }}>Yopish</button>
             </div>
-
-            {!userDetails ? (
-              <div style={{ textAlign: "center", padding: 40 }}>
-                <div>⏳ Yuklanmoqda...</div>
-              </div>
-            ) : userDetails.usageHistory.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
-                Bu foydalanuvchi hali kod ishlatmagan
-              </div>
-            ) : (
-              <div>
-                <div
-                  style={{ marginBottom: 12, fontWeight: 500, fontSize: 16, display: 'flex', gap: '20px' }}
-                >
-                  <span>📊 Jami kodlar: {userDetails.totalCodes} ta</span>
-                  <span style={{ color: 'green' }}>💎 Jami Ball: {userDetails.user?.totalPoints || 0}</span>
-                </div>
-                <table
-                  style={{
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: 14,
-                  }}
-                >
-                  <thead>
-                    <tr
-                      style={{
-                        background: "#f5f5f5",
-                        textAlign: "left",
-                        borderBottom: "2px solid #ddd",
-                      }}
-                    >
-                      <th style={{ padding: "10px 8px" }}>#</th>
-                      <th style={{ padding: "10px 8px" }}>Promo Kod</th>
-                      <th style={{ padding: "10px 8px" }}>Ball</th>
-                      <th style={{ padding: "10px 8px" }}>Mavsum</th>
-                      <th style={{ padding: "10px 8px" }}>Sana</th>
-                      <th style={{ padding: "10px 8px", width: 60 }}>O'chirish</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userDetails.usageHistory.map((usage, idx) => (
-                      <tr
-                        key={usage._id}
-                        style={{
-                          borderBottom: "1px solid #eee",
-                          background: idx % 2 === 0 ? "#fafafa" : "white",
-                        }}
-                      >
-                        <td style={{ padding: "10px 8px" }}>{idx + 1}</td>
-                        <td
-                          style={{
-                            padding: "10px 8px",
-                            fontFamily: "monospace",
-                            fontWeight: 500,
-                          }}
-                        >
-                          {usage.promoCode}
-                        </td>
-                        <td style={{ padding: "10px 8px", fontWeight: "bold", color: "green" }}>
-                          {usage.points || 0}
-                        </td>
-                        <td style={{ padding: "10px 8px" }}>
-                          {usage.seasonId?.name || "—"}
-                        </td>
-                        <td style={{ padding: "10px 8px", fontSize: 13 }}>
-                          {new Date(usage.usedAt).toLocaleString("uz-UZ")}
-                        </td>
-                        <td
-                          style={{
-                            padding: "10px 8px",
-                            textAlign: "center",
-                          }}
-                        >
-                          <button
-                            className="button"
-                            style={{
-                              padding: "4px 8px",
-                              fontSize: 12,
-                              background: "#ff5252",
-                              minWidth: "auto",
-                              marginLeft: 0,
-                            }}
-                            title="Kodini o'chirish"
-                            onClick={() => handleDeleteCode(usage.promoCode)}
-                          >
-                            🗑
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </div>
       )}

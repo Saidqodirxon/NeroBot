@@ -25,6 +25,20 @@ const prizeSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    prizeType: {
+      type: String,
+      enum: ["random", "points"],
+      default: "random",
+      index: true,
+    },
+    position: {
+      type: Number,
+      default: null,
+    },
+    requiredPoints: {
+      type: Number,
+      default: null,
+    },
     createdAt: {
       type: Date,
       default: Date.now,

@@ -8,6 +8,8 @@ const registrationScene = require("./scenes/registrationNew");
 const editProfileScene = require("./scenes/editProfile");
 const viewPromoCodesScene = require("./scenes/viewPromoCodes");
 const viewPrizesScene = require("./scenes/viewPrizes");
+const masterApplicationScene = require("./scenes/masterApplicationScene");
+const masterCabinetScene = require("./scenes/masterCabinetScene");
 const apiRoutes = require("./api/routesNew");
 const authRoutes = require("./api/auth");
 const { mainMenuKeyboard } = require("./keyboards/keyboards");
@@ -31,12 +33,25 @@ setBotInstance(bot);
 // Bot'ni export qilish (routes.js'da ishlatish uchun)
 module.exports = { bot };
 
+// Foydalanuvchi turiga mos menyu klaviaturasini olish
+const getUserMenu = async (telegramId) => {
+  try {
+    const User = require("./models/User");
+    const user = await User.findOne({ telegramId }).select("userType");
+    return mainMenuKeyboard(user?.userType || "user");
+  } catch {
+    return mainMenuKeyboard("user");
+  }
+};
+
 // Scene Manager
 const stage = new Scenes.Stage([
   registrationScene,
   editProfileScene,
   viewPromoCodesScene,
   viewPrizesScene,
+  masterApplicationScene,
+  masterCabinetScene,
 ]);
 
 // Middleware
@@ -143,30 +158,31 @@ bot.start(async (ctx) => {
           "Asosiy menyudan kerakli bo'limni tanlang:",
         {
           parse_mode: "Markdown",
-          ...mainMenuKeyboard(),
+          ...mainMenuKeyboard(user.userType),
         }
       );
     } else {
       // Yangi foydalanuvchi
       await ctx.reply(WELCOME_MESSAGE, {
         parse_mode: "Markdown",
-        ...mainMenuKeyboard(),
+        ...mainMenuKeyboard("user"),
       });
     }
   } catch (error) {
     console.error("Start command error:", error);
     await ctx.reply(
       "Xush kelibsiz! Asosiy menyudan kerakli bo'limni tanlang:",
-      mainMenuKeyboard()
+      mainMenuKeyboard("user")
     );
   }
 });
 
 // /help buyrug'i
 bot.help(async (ctx) => {
+  const menu = await getUserMenu(ctx.from.id);
   await ctx.reply(HELP_MESSAGE, {
     parse_mode: "Markdown",
-    ...mainMenuKeyboard(),
+    ...menu,
   });
 });
 
@@ -220,21 +236,23 @@ bot.hears("👤 Profilim", async (ctx) => {
       { year: "numeric", month: "long", day: "numeric" }
     );
 
-    const profileInfo = `
-👤 <b>Sizning Profilingiz</b>
+    const isMaster = user.userType === "master";
+    const roleLabel = isMaster ? "👨‍🔧 Usta" : "👤 Foydalanuvchi";
+    const pointsLine = isMaster ? `\n⭐ <b>Jami Ballar:</b> ${realTotalPoints}` : "";
 
-📝 <b>Ism:</b> ${user.name}
-📱 <b>Telefon:</b> ${user.phone}
-🗺 <b>Viloyat:</b> ${user.region}
-${user.username ? `✈️ <b>Username:</b> @${user.username}` : ""}
-🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>
+    const profileInfoFull =
+      `👤 <b>Sizning Profilingiz</b>\n\n` +
+      `📝 <b>Ism:</b> ${user.name}\n` +
+      `📱 <b>Telefon:</b> ${user.phone}\n` +
+      `🗺 <b>Viloyat:</b> ${user.region}\n` +
+      `${user.username ? `✈️ <b>Username:</b> @${user.username}\n` : ""}` +
+      `🆔 <b>Telegram ID:</b> <code>${user.telegramId}</code>` +
+      pointsLine +
+      `\n📊 <b>Jami Kodlar:</b> ${codeCount} ta\n` +
+      `📅 <b>Ro'yxatdan o'tgan:</b> ${registeredDate}\n` +
+      `🔖 <b>Rol:</b> ${roleLabel}`;
 
-💰 <b>Jami Ballar:</b> ${realTotalPoints}
-📊 <b>Jami Kodlar:</b> ${codeCount} ta
-📅 <b>Ro'yxatdan o'tgan:</b> ${registeredDate}
-  `;
-
-    await ctx.reply(profileInfo, {
+    await ctx.reply(profileInfoFull, {
       parse_mode: "HTML",
       ...Markup.keyboard([
         ["✏️ Ma'lumotlarni o'zgartirish"],
@@ -267,35 +285,36 @@ bot.hears("🎟 Barcha kodlarimni ko'rish", async (ctx) => {
 
 // "Asosiy menyu" tugmasi
 bot.hears("🔙 Asosiy menyu", async (ctx) => {
-  // Session va scene cache'ni tozalash
-  if (ctx.session) {
-    ctx.session = {};
-  }
+  if (ctx.session) ctx.session = {};
   await ctx.scene.leave().catch(() => {});
-
-  await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
+  const menu = await getUserMenu(ctx.from.id);
+  await ctx.reply("🏠 Asosiy menyu:", menu);
 });
 
 // "🏠 Asosiy menyu" tugmasi
 bot.hears("🏠 Asosiy menyu", async (ctx) => {
-  // Session va scene cache'ni tozalash
-  if (ctx.session) {
-    ctx.session = {};
-  }
+  if (ctx.session) ctx.session = {};
   await ctx.scene.leave().catch(() => {});
-
-  await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
+  const menu = await getUserMenu(ctx.from.id);
+  await ctx.reply("🏠 Asosiy menyu:", menu);
 });
 
 // "Orqaga" tugmasi
 bot.hears("🔙 Orqaga", async (ctx) => {
-  // Session va scene cache'ni tozalash
-  if (ctx.session) {
-    ctx.session = {};
-  }
+  if (ctx.session) ctx.session = {};
   await ctx.scene.leave().catch(() => {});
+  const menu = await getUserMenu(ctx.from.id);
+  await ctx.reply("🏠 Asosiy menyu:", menu);
+});
 
-  await ctx.reply("🏠 Asosiy menyu:", mainMenuKeyboard());
+// "👨‍🔧 Usta bo'lish" tugmasi
+bot.hears("👨‍🔧 Usta bo'lish", async (ctx) => {
+  await ctx.scene.enter("master_application");
+});
+
+// "👨‍🔧 Mening kabinetim" tugmasi
+bot.hears("👨‍🔧 Mening kabinetim", async (ctx) => {
+  await ctx.scene.enter("master_cabinet");
 });
 
 // "Qo'llab-quvvatlash" tugmasi

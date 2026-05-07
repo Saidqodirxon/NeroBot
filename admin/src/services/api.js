@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_URL || "/api/v1";
+const API_BASE =
+  import.meta.env.VITE_API_URL || "http://localhost:3000/api/v1";
 
 const instance = axios.create({
   baseURL: API_BASE,
@@ -66,9 +67,38 @@ export const users = {
 export const promoCodes = {
   getAll: (params) => instance.get("/promo-codes", { params }),
   create: (data) => instance.post("/promo-codes", data),
-  update: (code, data) => instance.put(`/promo-codes/${code}`, data), // This updates single
+  update: (code, data) => instance.put(`/promo-codes/${code}`, data),
   bulkUpdate: (data) => instance.put("/promo-codes/bulk", data),
   delete: (code) => instance.delete(`/promo-codes/${code}`),
+};
+
+export const prizes = {
+  getAll: (params) => instance.get("/prizes", { params }),
+  create: (data) => instance.post("/prizes", data),
+  update: (id, data) => instance.put(`/prizes/${id}`, data),
+  delete: (id) => instance.delete(`/prizes/${id}`),
+};
+
+export const masters = {
+  getAll: (params) => instance.get("/masters", { params }),
+  getHistory: (telegramId) => instance.get(`/masters/${telegramId}/history`),
+};
+
+export const masterApplications = {
+  getAll: (params) => instance.get("/master-applications", { params }),
+  approve: (id) => instance.post(`/master-applications/${id}/approve`),
+  reject: (id, reason) => instance.post(`/master-applications/${id}/reject`, { reason }),
+};
+
+export const masterPrizeClaims = {
+  getAll: (params) => instance.get("/master-prize-claims", { params }),
+  give: (id) => instance.post(`/master-prize-claims/${id}/give`),
+};
+
+export const winnerSessions = {
+  getAll: (params) => instance.get("/winner-sessions", { params }),
+  getOne: (id) => instance.get(`/winner-sessions/${id}`),
+  create: (data) => instance.post("/winner-sessions", data),
 };
 
 export const api = instance;
