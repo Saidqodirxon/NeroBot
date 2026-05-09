@@ -18,9 +18,7 @@ const HELP_MESSAGE = `
 "👤 Profilim" tugmasida ma'lumotlaringizni ko'rishingiz va tahrirlashingiz mumkin.
 
 🔹 *Qo'llab-quvvatlash:*
-"🛠 Qo'llab-quvvatlash" tugmasini bosing yoki @${
-  process.env.SUPPORT_USERNAME || "admin"
-} ga murojaat qiling.
+"🛠 Qo'llab-quvvatlash" tugmasini bosing yoki 📞 *55 510 10 00* ga qo'ng'iroq qiling.
 
 ⚠️ *Muhim eslatmalar:*
 - Har bir promo kod faqat bir marta ishlatilishi mumkin
@@ -37,7 +35,7 @@ const SUPPORT_MESSAGE = `
 
 Agar sizda savollar yoki muammolar bo'lsa, qo'llab-quvvatlash xizmatiga murojaat qiling:
 
-👤 Telegram: @${process.env.SUPPORT_USERNAME || "admin"}
+📞 Qo'ng'iroq markazi: <b>55 510 10 00</b>
 
 Tez orada sizga javob beramiz!
 `;

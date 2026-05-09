@@ -769,36 +769,38 @@ router.delete("/promo-codes/:code", jwtAuth, async (req, res) => {
 
 // ==================== USER MANAGEMENT ====================
 
-// GET: Get users with filters
+// GET: Get users with filters + search + pagination
 router.get("/users", jwtAuth, async (req, res) => {
   try {
-    const { region, limit = 100, skip = 0, userType } = req.query;
+    const { region, limit = 50, skip = 0, userType, search } = req.query;
 
     const filter = {};
     if (region && region !== "all") {
-      if (region === "Toshkent") {
-        filter.region = { $in: ["Toshkent shahri", "Toshkent viloyati"] };
-      } else {
-        filter.region = region;
-      }
+      filter.region = region === "Toshkent"
+        ? { $in: ["Toshkent shahri", "Toshkent viloyati"] }
+        : region;
     }
-    if (userType && userType !== "all") {
-      filter.userType = userType;
+    if (userType && userType !== "all") filter.userType = userType;
+    if (search && search.trim()) {
+      const s = search.trim();
+      const searchRegex = new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [
+        { name: searchRegex },
+        { phone: searchRegex },
+        { username: searchRegex },
+        ...(isNaN(s) ? [] : [{ telegramId: parseInt(s) }]),
+      ];
     }
 
-    const users = await User.find(filter)
-      .sort({ totalPoints: -1, registeredAt: -1 }) // Sort by points first
-      .limit(parseInt(limit))
-      .skip(parseInt(skip));
+    const [users, total] = await Promise.all([
+      User.find(filter)
+        .sort({ registeredAt: -1 })
+        .limit(parseInt(limit))
+        .skip(parseInt(skip)),
+      User.countDocuments(filter),
+    ]);
 
-    const total = await User.countDocuments(filter);
-
-    res.json({
-      success: true,
-      total,
-      count: users.length,
-      data: users,
-    });
+    res.json({ success: true, total, count: users.length, data: users });
   } catch (error) {
     console.error("Get users error:", error);
     res.status(500).json({ success: false, message: "Server xatosi" });
@@ -1358,10 +1360,10 @@ router.post("/broadcast", jwtAuth, async (req, res) => {
       try {
         await bot.telegram.sendMessage(
           process.env.ADMIN_GROUP_ID,
-          `📢 *YANGILIK*\n\n${message}\n\n_Viloyat: ${
+          `📢 <b>YANGILIK</b>\n\n${message}\n\n<i>Viloyat: ${
             region === "all" ? "Barcha" : region
-          }_`,
-          { parse_mode: "Markdown" }
+          }</i>`,
+          { parse_mode: "HTML" }
         );
       } catch (err) {
         console.error("Guruhga yuborishda xato:", err);
@@ -1428,6 +1430,30 @@ Vaqt: ${new Date().toLocaleString("uz-UZ")}
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: "Server xatosi" });
     }
+  }
+});
+
+// POST: Bitta usergа xabar yuborish (broadcast tab)
+router.post("/broadcast/send-one", jwtAuth, async (req, res) => {
+  try {
+    const { telegramId, message: msg } = req.body;
+    if (!telegramId) return res.status(400).json({ success: false, message: "Telegram ID kiritilmadi" });
+    if (!msg || !msg.trim()) return res.status(400).json({ success: false, message: "Xabar matni bo'sh" });
+
+    const { bot } = require("../nerobot");
+    try {
+      await bot.telegram.sendMessage(parseInt(telegramId), msg.trim(), { parse_mode: "HTML" });
+      res.json({ success: true, message: `Xabar ${telegramId} ga yuborildi` });
+    } catch (err) {
+      const desc = err.response?.description || err.message || "";
+      const text = desc.includes("blocked") ? "Foydalanuvchi botni bloklagan"
+        : (desc.includes("not found") || desc.includes("chat not found")) ? "Foydalanuvchi topilmadi"
+        : "Yuborib bo'lmadi: " + desc;
+      res.status(400).json({ success: false, message: text });
+    }
+  } catch (err) {
+    console.error("broadcast/send-one error:", err);
+    if (!res.headersSent) res.status(500).json({ success: false, message: "Server xatosi" });
   }
 });
 
@@ -1969,6 +1995,186 @@ router.post("/drawing/notify", jwtAuth, async (req, res) => {
     res.json({ success: true, sent, sentToWinners });
   } catch (error) {
     console.error("Drawing notify error:", error);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// ==================== PHONE UPDATE ====================
+
+const { isValidPhone, normalizePhone } = require("../utils/phoneUtils");
+
+const PHONE_UPDATE_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 soat
+
+// GET /phone-update/stats — noto'g'ri raqamli userlar statistikasi
+router.get("/phone-update/stats", jwtAuth, async (req, res) => {
+  try {
+    const allInvalid = await User.find().select("phone phoneUpdateRequestSent phoneUpdateRequestSentAt").lean();
+
+    let totalInvalid = 0;
+    let notSentYet = 0;
+    let sentButNotUpdated = 0;
+    let alreadyUpdated = 0;
+
+    for (const u of allInvalid) {
+      if (!isValidPhone(u.phone)) {
+        totalInvalid++;
+        if (!u.phoneUpdateRequestSent) {
+          notSentYet++;
+        } else {
+          sentButNotUpdated++;
+        }
+      } else if (u.phoneUpdateRequestSent) {
+        alreadyUpdated++;
+      }
+    }
+
+    res.json({ success: true, data: { totalInvalid, notSentYet, sentButNotUpdated, alreadyUpdated } });
+  } catch (err) {
+    console.error("phone-update/stats error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST /phone-update/send — noto'g'ri raqamli userlarga so'rov yuborish
+router.post("/phone-update/send", jwtAuth, async (req, res) => {
+  try {
+    const { target, message: customMsg } = req.body; // "unsent" | "incomplete"
+    const msgText = (customMsg && customMsg.trim())
+      ? customMsg.trim()
+      : "📱 Telefon raqamingizni yangilang\n\nBotdagi telefon raqamingiz noto'g'ri yoki eskirgan formatda.\n\nQuyidagi tugmani bosing va yangi raqamingizni yuboring 👇";
+
+    const { bot } = require("../nerobot");
+    const now = Date.now();
+
+    // Filtr: unsent = hali so'rov olmagan, incomplete = so'rov olgan lekin yangilamagan
+    const users = await User.find().select("telegramId phone phoneUpdateRequestSent phoneUpdateRequestSentAt").lean();
+
+    const targets = users.filter((u) => {
+      if (isValidPhone(u.phone)) return false;
+      if (target === "unsent") return !u.phoneUpdateRequestSent;
+      if (target === "incomplete") {
+        if (!u.phoneUpdateRequestSent) return false;
+        // 24 soat cooldown tekshiruvi
+        if (u.phoneUpdateRequestSentAt && now - new Date(u.phoneUpdateRequestSentAt).getTime() < PHONE_UPDATE_COOLDOWN_MS) return false;
+        return true;
+      }
+      return false;
+    });
+
+    if (targets.length === 0) {
+      return res.json({ success: true, sent: 0, skipped: 0, message: "Yuborish uchun foydalanuvchi yo'q" });
+    }
+
+    res.json({ success: true, sent: targets.length, skipped: users.length - targets.length, message: "Xabar yuborish boshlandi" });
+
+    // Background da yuborish
+    let sent = 0;
+    for (const u of targets) {
+      try {
+        await bot.telegram.sendMessage(
+          u.telegramId,
+          msgText,
+          {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "📱 Raqamni yangilash", callback_data: "update_phone_request" }],
+              ],
+            },
+          }
+        );
+
+        await User.updateOne(
+          { telegramId: u.telegramId },
+          { phoneUpdateRequestSent: true, phoneUpdateRequestSentAt: new Date() }
+        );
+
+        sent++;
+        // Rate limit: 30 xabar/soniya
+        if (sent % 25 === 0) await new Promise((r) => setTimeout(r, 1000));
+      } catch (err) {
+        console.error(`phone-update send error for ${u.telegramId}:`, err.message);
+      }
+    }
+
+    console.log(`✅ Phone update requests sent: ${sent}/${targets.length}`);
+  } catch (err) {
+    console.error("phone-update/send error:", err);
+    if (!res.headersSent) res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// POST /phone-update/send-one — bitta usergа xabar yuborish
+router.post("/phone-update/send-one", jwtAuth, async (req, res) => {
+  try {
+    const { telegramId, message: customMsg } = req.body;
+    if (!telegramId) {
+      return res.status(400).json({ success: false, message: "Telegram ID kiritilmadi" });
+    }
+
+    const msgText = (customMsg && customMsg.trim())
+      ? customMsg.trim()
+      : "📱 Telefon raqamingizni yangilang\n\nBotdagi telefon raqamingiz noto'g'ri yoki eskirgan formatda.\n\nQuyidagi tugmani bosing va yangi raqamingizni yuboring 👇";
+
+    const { bot } = require("../nerobot");
+
+    try {
+      await bot.telegram.sendMessage(
+        parseInt(telegramId),
+        msgText,
+        {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "📱 Raqamni yangilash", callback_data: "update_phone_request" }],
+            ],
+          },
+        }
+      );
+      res.json({ success: true, message: `Xabar ${telegramId} ga yuborildi` });
+    } catch (err) {
+      const desc = err.response?.description || err.message || "";
+      const msg = desc.includes("blocked")
+        ? "Foydalanuvchi botni bloklagan"
+        : desc.includes("not found") || desc.includes("chat not found")
+        ? "Foydalanuvchi topilmadi (ID noto'g'ri bo'lishi mumkin)"
+        : "Xabar yuborib bo'lmadi: " + desc;
+      res.status(400).json({ success: false, message: msg });
+    }
+  } catch (err) {
+    console.error("phone-update/send-one error:", err);
+    res.status(500).json({ success: false, message: "Server xatosi" });
+  }
+});
+
+// PUT /users/:telegramId/phone — admin paneldan qo'lda telefon yangilash
+router.put("/users/:telegramId/phone", jwtAuth, async (req, res) => {
+  try {
+    const { telegramId } = req.params;
+    const { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: "Telefon raqam kiritilmadi" });
+    }
+
+    const normalized = normalizePhone(phone);
+    if (!normalized) {
+      return res.status(400).json({ success: false, message: "Noto'g'ri format. Masalan: +998901234567" });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { telegramId: parseInt(telegramId) },
+      { phone: normalized },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
+    }
+
+    res.json({ success: true, message: "Telefon raqam yangilandi", data: { phone: normalized } });
+  } catch (err) {
+    console.error("PUT users/:telegramId/phone error:", err);
     res.status(500).json({ success: false, message: "Server xatosi" });
   }
 });

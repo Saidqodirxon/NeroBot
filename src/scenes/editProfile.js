@@ -6,6 +6,7 @@ const {
   mainMenuKeyboard,
   cancelKeyboard,
 } = require("../keyboards/keyboards");
+const { normalizePhone } = require("../utils/phoneUtils");
 
 const editProfileScene = new Scenes.WizardScene(
   "edit_profile",
@@ -85,16 +86,24 @@ Nimani o'zgartirmoqchisiz?
 
     try {
       if (editField === "📱 Telefonni o'zgartirish") {
+        let rawPhone = null;
         if (ctx.message?.contact) {
-          newValue = ctx.message.contact.phone_number;
+          rawPhone = ctx.message.contact.phone_number;
         } else if (ctx.message?.text) {
-          newValue = ctx.message.text;
+          rawPhone = ctx.message.text.trim();
         }
+
+        newValue = normalizePhone(rawPhone);
 
         if (!newValue) {
           return await ctx.reply(
-            "Iltimos, telefon raqamingizni yuboring:",
-            contactKeyboard()
+            "❌ Raqam noto'g'ri formatda.\n\n" +
+              "Iltimos, tugmani bosing yoki quyidagi formatda yozing:\n" +
+              "<b>+998901234567</b>",
+            {
+              parse_mode: "HTML",
+              ...contactKeyboard(),
+            }
           );
         }
 
@@ -106,8 +115,11 @@ Nimani o'zgartirmoqchisiz?
         }
 
         await ctx.reply(
-          `✅ Telefon raqamingiz "${newValue}" ga o'zgartirildi!`,
-          mainMenuKeyboard()
+          `✅ Telefon raqamingiz <b>${newValue}</b> ga o'zgartirildi!`,
+          {
+            parse_mode: "HTML",
+            ...mainMenuKeyboard(),
+          }
         );
       } else if (editField === "🗺 Viloyatni o'zgartirish") {
         const { REGIONS } = require("../utils/regions");

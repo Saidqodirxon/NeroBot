@@ -8,6 +8,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ckeditor/ckeditor5-build-classic": "^41.4.2",
+    "@ckeditor/ckeditor5-react": "^11.1.2",
     "@mui/icons-material": "^5.14.7",
     "@mui/material": "^5.14.7",
     "@vitejs/plugin-react": "^5.1.1",

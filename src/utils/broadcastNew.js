@@ -27,7 +27,7 @@ async function sendBroadcast(bot, message, region = null) {
 
     try {
       await bot.telegram.sendMessage(user.telegramId, message, {
-        parse_mode: "Markdown",
+        parse_mode: "HTML",
       });
       results.success++;
 

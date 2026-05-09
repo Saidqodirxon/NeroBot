@@ -10,6 +10,8 @@ const viewPromoCodesScene = require("./scenes/viewPromoCodes");
 const viewPrizesScene = require("./scenes/viewPrizes");
 const masterApplicationScene = require("./scenes/masterApplicationScene");
 const masterCabinetScene = require("./scenes/masterCabinetScene");
+const phoneUpdateScene = require("./scenes/phoneUpdateScene");
+const { isValidPhone } = require("./utils/phoneUtils");
 const apiRoutes = require("./api/routesNew");
 const authRoutes = require("./api/auth");
 const { mainMenuKeyboard } = require("./keyboards/keyboards");
@@ -52,6 +54,7 @@ const stage = new Scenes.Stage([
   viewPrizesScene,
   masterApplicationScene,
   masterCabinetScene,
+  phoneUpdateScene,
 ]);
 
 // Middleware
@@ -152,6 +155,11 @@ bot.start(async (ctx) => {
     const user = await User.findOne({ telegramId: ctx.from.id });
 
     if (user) {
+      // Telefon raqam noto'g'ri formatda bo'lsa — yangilashga yo'naltirish
+      if (!isValidPhone(user.phone)) {
+        return await ctx.scene.enter("phone_update");
+      }
+
       // Ro'yxatdan o'tgan foydalanuvchi
       await ctx.reply(
         `👋 *Xush kelibsiz, ${user.name}!*\n\n` +
@@ -184,6 +192,20 @@ bot.help(async (ctx) => {
     parse_mode: "Markdown",
     ...menu,
   });
+});
+
+// Inline tugma: admin yuborgan "Raqamni yangilash" so'rovidan
+bot.action("update_phone_request", async (ctx) => {
+  try {
+    await ctx.answerCbQuery();
+    // Tugmali xabarni o'chirish — ikki xabar bo'lib qolmasin
+    try {
+      await ctx.deleteMessage();
+    } catch {}
+    await ctx.scene.enter("phone_update");
+  } catch (err) {
+    console.error("update_phone_request action error:", err);
+  }
 });
 
 // "📝 Kod yuborish" tugmasi

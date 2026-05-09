@@ -239,6 +239,37 @@ select.input, select.form-control { cursor: pointer; }
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { padding: 8px; border-bottom: 1px solid #eee; }
 
+/* ── CKEditor Integration ── */
+.ck.ck-editor { border-radius: var(--radius-sm) !important; overflow: hidden; }
+.ck.ck-toolbar {
+  border: 1.5px solid var(--border) !important;
+  border-bottom: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0 !important;
+  background: #f8fafc !important;
+  padding: 4px 6px !important;
+}
+.ck.ck-editor__main > .ck-editor__editable {
+  border: 1.5px solid var(--border) !important;
+  border-top: none !important;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm) !important;
+  min-height: 220px !important;
+  font-family: 'Inter', Arial, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  color: var(--text) !important;
+  transition: border-color 0.15s !important;
+  box-shadow: none !important;
+  padding: 12px 16px !important;
+}
+.ck.ck-editor__main > .ck-editor__editable:focus {
+  border-color: var(--primary) !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.ck.ck-button { border-radius: 6px !important; }
+.ck.ck-button:hover { background: var(--primary-light) !important; }
+.ck.ck-button.ck-on { background: var(--primary-light) !important; color: var(--primary) !important; }
+
 /* DRAWING PAGE — dark mode override */
 .drawing-page .app-topbar {
   background: #0a0f1e;

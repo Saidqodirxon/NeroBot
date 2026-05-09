@@ -71,6 +71,14 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    phoneUpdateRequestSent: {
+      type: Boolean,
+      default: false,
+    },
+    phoneUpdateRequestSentAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

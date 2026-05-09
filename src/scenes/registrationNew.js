@@ -16,6 +16,7 @@ const {
   CODE_NOT_FOUND,
   CODE_ALREADY_USED,
 } = require("../utils/messages");
+const { normalizePhone } = require("../utils/phoneUtils");
 
 // Telegram MarkdownV2 escaping
 const escapeMarkdown = (text) => {
@@ -101,17 +102,24 @@ const registrationScene = new Scenes.WizardScene(
         return await ctx.reply("❌ Bekor qilindi.", mainMenuKeyboard());
       }
 
-      let phone = null;
+      let rawPhone = null;
       if (ctx.message?.contact) {
-        phone = ctx.message.contact.phone_number;
+        rawPhone = ctx.message.contact.phone_number;
       } else if (ctx.message?.text) {
-        phone = ctx.message.text.trim();
+        rawPhone = ctx.message.text.trim();
       }
+
+      const phone = normalizePhone(rawPhone);
 
       if (!phone) {
         return await ctx.reply(
-          '❌ Iltimos, telefon raqamingizni yuboring yoki "📱 Kontaktni yuborish" tugmasini bosing:',
-          contactKeyboard()
+          "❌ Telefon raqam noto'g'ri formatda.\n\n" +
+            "Iltimos, tugmani bosing yoki quyidagi formatda yozing:\n" +
+            "<b>+998901234567</b>",
+          {
+            parse_mode: "HTML",
+            ...contactKeyboard(),
+          }
         );
       }
 

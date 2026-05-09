@@ -101,6 +101,19 @@ export const winnerSessions = {
   create: (data) => instance.post("/winner-sessions", data),
 };
 
+export const phoneUpdate = {
+  getStats: () => instance.get("/phone-update/stats"),
+  send: (target, message) => instance.post("/phone-update/send", { target, message }),
+  sendOne: (telegramId, message) => instance.post("/phone-update/send-one", { telegramId, message }),
+  updateUserPhone: (telegramId, phone) =>
+    instance.put(`/users/${telegramId}/phone`, { phone }),
+};
+
+export const broadcast = {
+  sendOne: (telegramId, message) =>
+    instance.post("/broadcast/send-one", { telegramId, message }),
+};
+
 export const api = instance;
 
 export default instance;
