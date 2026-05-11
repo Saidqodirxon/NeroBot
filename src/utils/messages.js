@@ -35,7 +35,7 @@ const SUPPORT_MESSAGE = `
 
 Agar sizda savollar yoki muammolar bo'lsa, qo'llab-quvvatlash xizmatiga murojaat qiling:
 
-📞 Qo'ng'iroq markazi: <b>55 510 10 00</b>
+📞 Qo'ng'iroq markazi: <b>555101000</b>
 
 Tez orada sizga javob beramiz!
 `;
