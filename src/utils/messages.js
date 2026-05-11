@@ -18,7 +18,7 @@ const HELP_MESSAGE = `
 "👤 Profilim" tugmasida ma'lumotlaringizni ko'rishingiz va tahrirlashingiz mumkin.
 
 🔹 *Qo'llab-quvvatlash:*
-"🛠 Qo'llab-quvvatlash" tugmasini bosing yoki 📞 *555101000* ga qo'ng'iroq qiling.
+"🛠 Qo'llab-quvvatlash" tugmasini bosing yoki 📞 *+998555101000* ga qo'ng'iroq qiling.
 
 ⚠️ *Muhim eslatmalar:*
 - Har bir promo kod faqat bir marta ishlatilishi mumkin
@@ -35,7 +35,7 @@ const SUPPORT_MESSAGE = `
 
 Agar sizda savollar yoki muammolar bo'lsa, qo'llab-quvvatlash xizmatiga murojaat qiling:
 
-📞 Qo'ng'iroq markazi: <b>555101000</b>
+📞 Qo'ng'iroq markazi: <b>+998555101000</b>
 
 Tez orada sizga javob beramiz!
 `;
