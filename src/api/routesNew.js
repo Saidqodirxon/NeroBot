@@ -13,6 +13,7 @@ const MasterPrizeClaim = require("../models/MasterPrizeClaim");
 const WinnerSession = require("../models/WinnerSession");
 const { authMiddleware: jwtAuth } = require("../middleware/auth");
 const { sendBroadcast } = require("../utils/broadcastNew");
+const { getSeasonPoints } = require("../utils/pointUtils");
 const XLSX = require("xlsx");
 
 // Multer storage configuration for prize images
@@ -80,7 +81,7 @@ const buildDrawingFilter = async ({ region, seasonId, excludeIds = [], excludePr
     filter.seasonId = seasonId;
   }
 
-  let allowedIds = await User.find({ userType: "user" }).distinct("telegramId");
+  let allowedIds = await User.find({ userType: { $ne: "master" } }).distinct("telegramId");
   if (excludeIds.length > 0) {
     allowedIds = allowedIds.filter((id) => !excludeIds.includes(id));
   }
@@ -110,19 +111,15 @@ const loadDrawingPool = async ({ region, seasonId, excludeIds = [], excludePromo
     return { exhausted: false, records: [], pool: [] };
   }
 
-  const seenTelegram = new Set();
   const seenPromo = new Set();
-  const uniqueMap = new Map();
+  const pool = [];
   for (const r of records) {
     const promo = String(r.promoCode || "").toUpperCase();
     if (!r.telegramId || !promo) continue;
-    if (seenTelegram.has(r.telegramId) || seenPromo.has(promo)) continue;
-    seenTelegram.add(r.telegramId);
+    if (seenPromo.has(promo)) continue;
     seenPromo.add(promo);
-    uniqueMap.set(`${r.telegramId}:${promo}`, r);
+    pool.push(r);
   }
-
-  const pool = Array.from(uniqueMap.values());
 
   return { exhausted: false, records, pool };
 };
@@ -1177,26 +1174,26 @@ router.post("/random-winner", jwtAuth, async (req, res) => {
       });
     }
 
-    // Unique users based on telegramId to prevent duplicates
-    const uniqueUsersMap = new Map();
+    // Unique promo codes (each code = one ticket, multiple codes per user allowed)
+    const seenPromo = new Set();
+    const uniqueCodesArray = [];
     for (const record of usageRecords) {
-      if (!uniqueUsersMap.has(record.telegramId)) {
-        uniqueUsersMap.set(record.telegramId, record);
-      }
+      const promo = String(record.promoCode || "").toUpperCase();
+      if (!promo || seenPromo.has(promo)) continue;
+      seenPromo.add(promo);
+      uniqueCodesArray.push(record);
     }
 
-    const uniqueUsersArray = Array.from(uniqueUsersMap.values());
-
-    if (uniqueUsersArray.length === 0) {
+    if (uniqueCodesArray.length === 0) {
       return res.json({
         success: false,
-        message: "Noyob foydalanuvchilar topilmadi",
+        message: "Promokodlar topilmadi",
       });
     }
 
-    // Randomly select unique users (max 10, no duplicates)
+    // Randomly select from promo codes pool (no duplicates)
     const winners = [];
-    const usageCopy = [...uniqueUsersArray];
+    const usageCopy = [...uniqueCodesArray];
     const selectCount = Math.min(count, usageCopy.length);
 
     for (let i = 0; i < selectCount; i++) {
@@ -1257,7 +1254,7 @@ router.post("/random-winner", jwtAuth, async (req, res) => {
     res.json({
       success: true,
       data: winners,
-      total: uniqueUsersArray.length,
+      total: uniqueCodesArray.length,
     });
   } catch (error) {
     console.error("Random winner error:", error);
@@ -1611,7 +1608,7 @@ router.get("/master-prize-claims", jwtAuth, async (req, res) => {
     if (status && status !== "all") filter.status = status;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [data, total] = await Promise.all([
-      MasterPrizeClaim.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      MasterPrizeClaim.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).populate("seasonId", "name"),
       MasterPrizeClaim.countDocuments(filter),
     ]);
     res.json({ success: true, total, data });
@@ -1630,8 +1627,12 @@ router.post("/master-prize-claims/:id/give", jwtAuth, async (req, res) => {
 
     const user = await User.findOne({ telegramId: claim.telegramId });
     if (!user) return res.status(404).json({ success: false, message: "Foydalanuvchi topilmadi" });
-    if (user.totalPoints < claim.requiredPoints) {
-      return res.status(400).json({ success: false, message: `Yetarli ball yo'q. Kerakli: ${claim.requiredPoints}, Mavjud: ${user.totalPoints}` });
+
+    const seasonBal = claim.seasonId
+      ? await getSeasonPoints(claim.telegramId, claim.seasonId)
+      : user.totalPoints;
+    if (seasonBal < claim.requiredPoints) {
+      return res.status(400).json({ success: false, message: `Yetarli ball yo'q. Kerakli: ${claim.requiredPoints}, Mavjud: ${seasonBal}` });
     }
 
     await Promise.all([
@@ -1742,7 +1743,7 @@ router.post("/drawing/start", jwtAuth, async (req, res) => {
     }
     if (seasonId && seasonId !== "all") filter.seasonId = seasonId;
 
-    let allowedIds = await User.find({ userType: "user" }).distinct("telegramId");
+    let allowedIds = await User.find({ userType: { $ne: "master" } }).distinct("telegramId");
     if (excludeIds.length > 0) {
       allowedIds = allowedIds.filter((id) => !excludeIds.includes(id));
     }
@@ -1760,16 +1761,14 @@ router.post("/drawing/start", jwtAuth, async (req, res) => {
       return res.json({ success: false, message: "Ishtirokchilar topilmadi" });
     }
 
-    // Unique users and promo codes
-    const seenTelegram = new Set();
+    // Unique promo codes only (each code = one ticket, multiple codes per user allowed)
     const seenPromo = new Set();
     const pool = [];
     for (const r of records) {
       const promo = String(r.promoCode || "").toUpperCase();
       if (!r.telegramId || !promo) continue;
-      if (seenTelegram.has(r.telegramId) || seenPromo.has(promo)) continue;
+      if (seenPromo.has(promo)) continue;
       if (excludePromoCodes.map((code) => String(code || "").toUpperCase()).includes(promo)) continue;
-      seenTelegram.add(r.telegramId);
       seenPromo.add(promo);
       pool.push(r);
     }
@@ -2179,5 +2178,46 @@ router.put("/users/:telegramId/phone", jwtAuth, async (req, res) => {
   }
 });
 
+// ===== MIGRATIONS =====
+
+async function migrateUserTypes() {
+  const result = await User.updateMany(
+    { $or: [{ userType: null }, { userType: { $exists: false } }] },
+    { $set: { userType: "user" } }
+  );
+  if (result.modifiedCount > 0) {
+    console.log(`[Migration] userType tuzatildi: ${result.modifiedCount} ta user`);
+  }
+}
+
+async function migratePointsFromUsage() {
+  const users = await User.find({}).select("telegramId totalPoints");
+  let fixed = 0;
+  for (const user of users) {
+    const result = await PromoCodeUsage.aggregate([
+      { $match: { telegramId: user.telegramId } },
+      { $group: { _id: null, total: { $sum: "$points" } } },
+    ]);
+    const correctTotal = result[0]?.total || 0;
+    if (user.totalPoints !== correctTotal) {
+      await User.updateOne({ telegramId: user.telegramId }, { $set: { totalPoints: correctTotal } });
+      fixed++;
+    }
+  }
+  if (fixed > 0) {
+    console.log(`[Migration] totalPoints tuzatildi: ${fixed} ta user`);
+  }
+}
+
+async function runMigrations() {
+  try {
+    await migrateUserTypes();
+    await migratePointsFromUsage();
+  } catch (err) {
+    console.error("[Migration] Xatolik:", err.message);
+  }
+}
+
 module.exports = router;
 module.exports.setBotInstance = setBotInstance;
+module.exports.runMigrations = runMigrations;

@@ -12,10 +12,10 @@ const {
 const {
   REGISTRATION_SUCCESS,
   PROMO_CODE_PROMPT,
-  CODE_VERIFIED,
   CODE_NOT_FOUND,
   CODE_ALREADY_USED,
 } = require("../utils/messages");
+const { getSeasonPoints } = require("../utils/pointUtils");
 const { normalizePhone } = require("../utils/phoneUtils");
 
 // Telegram MarkdownV2 escaping
@@ -457,18 +457,32 @@ const registrationScene = new Scenes.WizardScene(
       user.usedPromoCode = code;
       await user.save();
 
-      // Get total usage count
-      const usageCount = await PromoCodeUsage.countDocuments({
-        telegramId: ctx.from.id,
-      });
+      // Get total usage count and season info
+      const [usageCount, season] = await Promise.all([
+        PromoCodeUsage.countDocuments({ telegramId: ctx.from.id }),
+        Season.findById(promoCode.seasonId).select("name"),
+      ]);
 
-      // Send success message to user
-      await ctx.reply(
-        CODE_VERIFIED(user.name, code, user.phone, points, user.totalPoints),
-        {
-          parse_mode: "Markdown",
-        }
-      );
+      const seasonName = season?.name || "—";
+
+      // Send season-aware success message
+      const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      if (user.userType === "master") {
+        const seasonBal = await getSeasonPoints(ctx.from.id, promoCode.seasonId);
+        await ctx.reply(
+          `✅ <b>Kod qabul qilindi! +${points} ball qo'shildi</b>\n\n` +
+            `📅 <b>${esc(seasonName)}</b> mavsum bali: <b>${seasonBal} ball</b> ⭐\n` +
+            `💰 Jami ballar: <b>${user.totalPoints} ball</b>`,
+          { parse_mode: "HTML" }
+        );
+      } else {
+        await ctx.reply(
+          `✅ <b>Kod qabul qilindi!</b>\n\n` +
+            `Siz <b>${esc(seasonName)}</b> mavsumiga qo'shildingiz 🎉\n` +
+            `<i>Promokodingiz lotereya havzasiga qo'shildi</i>`,
+          { parse_mode: "HTML" }
+        );
+      }
 
       await ctx.reply(
         `📊 *Jami ishlatilgan kodlar:* ${usageCount} ta\n\n` +

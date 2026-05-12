@@ -28,6 +28,12 @@ const masterPrizeClaimSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    seasonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Season",
+      default: null,
+      index: true,
+    },
     status: {
       type: String,
       enum: ["pending", "given"],

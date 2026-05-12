@@ -66,7 +66,7 @@ export default function MasterPrizeClaims() {
             <thead>
               <tr>
                 <th>#</th><th>Ism</th><th>Telefon</th>
-                <th>Sovg'a</th><th>Ball</th><th>Status</th>
+                <th>Sovg'a</th><th>Mavsum</th><th>Ball</th><th>Status</th>
                 <th>Sana</th><th>Amallar</th>
               </tr>
             </thead>
@@ -79,6 +79,7 @@ export default function MasterPrizeClaims() {
                     <td><strong>{claim.userName || "—"}</strong></td>
                     <td className="monospace">{claim.userPhone || "—"}</td>
                     <td>{claim.prizeName}</td>
+                    <td className="text-muted" style={{ fontSize: 12 }}>{claim.seasonId?.name || "—"}</td>
                     <td><span className="badge badge-warning">⭐ {claim.requiredPoints}</span></td>
                     <td><span className={`badge ${st.cls}`}>{st.icon} {st.label}</span></td>
                     <td className="text-muted" style={{ fontSize: 12 }}>

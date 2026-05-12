@@ -3,6 +3,7 @@ const Prize = require("../models/Prize");
 const Season = require("../models/Season");
 const User = require("../models/User");
 const MasterPrizeClaim = require("../models/MasterPrizeClaim");
+const { getSeasonPoints } = require("../utils/pointUtils");
 
 const PAGE_SIZE = 5;
 
@@ -193,9 +194,10 @@ viewPrizesScene.action(/^claim_prize_(.+)$/, async (ctx) => {
 
     if (!user || !prize) return ctx.reply("❌ Ma'lumot topilmadi.");
 
-    if (user.totalPoints < prize.requiredPoints) {
+    const seasonBal = await getSeasonPoints(telegramId, prize.seasonId);
+    if (seasonBal < prize.requiredPoints) {
       return ctx.reply(
-        `❌ Yetarli ball yo'q!\n\nKerakli: ${prize.requiredPoints} ball\nSizda: ${user.totalPoints} ball`
+        `❌ Yetarli ball yo'q!\n\nKerakli: ${prize.requiredPoints} ball\nBu mavsum bali: ${seasonBal} ball`
       );
     }
 
@@ -212,6 +214,7 @@ viewPrizesScene.action(/^claim_prize_(.+)$/, async (ctx) => {
       requiredPoints: prize.requiredPoints,
       userName: user.name,
       userPhone: user.phone,
+      seasonId: prize.seasonId,
       status: "pending",
     });
 
@@ -228,7 +231,7 @@ viewPrizesScene.action(/^claim_prize_(.+)$/, async (ctx) => {
             `🆔 Telegram ID: <code>${telegramId}</code>\n` +
             `🏆 Sovg'a: <b>${esc(prize.name)}</b>\n` +
             `⭐ Kerakli ball: <b>${prize.requiredPoints}</b>\n` +
-            `💰 Foydalanuvchi bali: <b>${user.totalPoints}</b>`,
+            `💰 Bu mavsum bali: <b>${seasonBal}</b>`,
           { parse_mode: "HTML" }
         );
       } catch (err) {
@@ -266,9 +269,11 @@ viewPrizesScene.on("text", async (ctx) => {
     }
 
     const telegramId = ctx.from.id;
-    const user = await User.findOne({ telegramId }).select("userType totalPoints name phone");
+    const user = await User.findOne({ telegramId }).select("userType name phone");
     const isMaster = user?.userType === "master";
-    const userPoints = user?.totalPoints || 0;
+    const userPoints = isMaster
+      ? await getSeasonPoints(telegramId, selectedSeason._id)
+      : 0;
 
     const prizeFilter = {
       seasonId: selectedSeason._id,
@@ -307,7 +312,7 @@ viewPrizesScene.on("text", async (ctx) => {
     if (isMaster) {
       await ctx.reply(
         `🎁 <b>${selectedSeason.name}</b> — Ballik Sovg'alar\n\n` +
-          `⭐ Sizning ballaringiz: <b>${userPoints}</b>\n` +
+          `📅 Bu mavsum bali: <b>${userPoints}</b> ⭐\n` +
           `Ball yig'ib sovg'a oling!`,
         { parse_mode: "HTML" }
       );

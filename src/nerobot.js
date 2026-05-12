@@ -13,6 +13,7 @@ const masterCabinetScene = require("./scenes/masterCabinetScene");
 const phoneUpdateScene = require("./scenes/phoneUpdateScene");
 const { isValidPhone } = require("./utils/phoneUtils");
 const apiRoutes = require("./api/routesNew");
+const { runMigrations } = require("./api/routesNew");
 const authRoutes = require("./api/auth");
 const { mainMenuKeyboard } = require("./keyboards/keyboards");
 const {
@@ -23,7 +24,7 @@ const {
 const { broadcastMessage } = require("./utils/broadcast");
 
 // Ma'lumotlar bazasiga ulanish
-connectDB();
+connectDB().then(() => runMigrations());
 
 // Bot yaratish
 const bot = new Telegraf(process.env.BOT_TOKEN);
